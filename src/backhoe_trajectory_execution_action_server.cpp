@@ -121,13 +121,38 @@ private:
       bool success = (move_group_->plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
       if (success)
       {
-        move_group_->execute(my_plan);
+        auto moveit_result = move_group_->execute(my_plan);
+
+        // Check the result of the execution.
+        if (moveit_result == moveit::planning_interface::MoveItErrorCode::SUCCESS)
+        {
+          // Create a result message.
+          result->error_code.val = 1;
+          RCLCPP_INFO(this->get_logger(), "Execution succeeded");
+        }
+        else
+        {
+          result->error_code.val = 9999;
+          RCLCPP_ERROR(this->get_logger(), "Execution failed");
+          break;
+        }
       }
       else
       {
+        result->error_code.val = 9999;
         RCLCPP_ERROR(this->get_logger(), "Planning failed");
         break;
       }
+    }
+
+    // Pass the result to the goal handle.
+    if (result->error_code.val == 1)
+    {
+      goal_handle->succeed(result);
+    }
+    else
+    {
+      goal_handle->abort(result);
     }
   }
 };
