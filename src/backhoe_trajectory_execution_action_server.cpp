@@ -109,6 +109,9 @@ private:
     auto feedback = std::make_shared<BackhoeTrajectoryExecution::Feedback>();
     auto result = std::make_shared<BackhoeTrajectoryExecution::Result>();
 
+    feedback->state = "IDLE";
+    goal_handle->publish_feedback(feedback);
+
     for (const auto& point : goal->trajectory.points)
     {
       std::map<std::string, double> target_joints;
@@ -118,9 +121,16 @@ private:
       }
       move_group_->setJointValueTarget(target_joints);
       moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+
+      feedback->state = "PLANNING";
+      goal_handle->publish_feedback(feedback);
+
       bool success = (move_group_->plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
       if (success)
       {
+        feedback->state = "EXECUTING";
+        goal_handle->publish_feedback(feedback);
+
         auto moveit_result = move_group_->execute(my_plan);
 
         // Check the result of the execution.
@@ -129,23 +139,28 @@ private:
           // Create a result message.
           result->error_code.val = 1;
           RCLCPP_INFO(this->get_logger(), "Execution succeeded");
+
+          feedback->state = "SUCCEEDED";
+          goal_handle->publish_feedback(feedback);
         }
         else
         {
           result->error_code.val = 9999;
           RCLCPP_ERROR(this->get_logger(), "Execution failed");
+
+          feedback->state = "FAILED";
+          goal_handle->publish_feedback(feedback);
           break;
         }
       }
       else
       {
-        result->error_code.val = 9999;
-        RCLCPP_ERROR(this->get_logger(), "Planning failed");
-        break;
+        feedback->state = "ABORTED";
+        goal_handle->publish_feedback(feedback);
       }
     }
 
-    // Pass the result to the goal handle.
+    // If execution was successful, set the result of the action and mark it as succeeded.
     if (result->error_code.val == 1)
     {
       goal_handle->succeed(result);
