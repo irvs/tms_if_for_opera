@@ -163,10 +163,12 @@ private:
     // If execution was successful, set the result of the action and mark it as succeeded.
     if (result->error_code.val == 1)
     {
+      RCLCPP_INFO(this->get_logger(), "Goal succeeded");
       goal_handle->succeed(result);
     }
     else
     {
+      RCLCPP_INFO(this->get_logger(), "Goal aborted");
       goal_handle->abort(result);
     }
   }
