@@ -20,6 +20,8 @@ find_package(moveit_ros_planning_interface REQUIRED)
 find_package(rosidl_default_runtime REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
 
+find_package(excavator_ik REQUIRED)
+
 add_executable(backhoe_trajectory_execution_action_server src/backhoe_trajectory_execution_action_server.cpp)
 ament_target_dependencies(backhoe_trajectory_execution_action_server
   "rclcpp"
@@ -30,6 +32,18 @@ ament_target_dependencies(backhoe_trajectory_execution_action_server
   "rosidl_default_runtime"
   "Boost")
 target_include_directories(backhoe_trajectory_execution_action_server PRIVATE include)
+
+add_executable(backhoe_change_pose_action_server src/backhoe_change_pose_action_server.cpp)
+ament_target_dependencies(backhoe_change_pose_action_server
+  "rclcpp"
+  "rclcpp_action"
+  "tms_msg_ts"
+  "moveit_common"
+  "moveit_ros_planning_interface"
+  "rosidl_default_runtime"
+  "Boost"
+  "excavator_ik")
+target_include_directories(backhoe_change_pose_action_server PRIVATE include)
 
 add_executable(backhoe_trajectory_execution_action_client src/backhoe_trajectory_execution_action_client.cpp)
 ament_target_dependencies(backhoe_trajectory_execution_action_client
@@ -42,6 +56,7 @@ target_include_directories(backhoe_trajectory_execution_action_client PRIVATE in
 
 install(TARGETS
   backhoe_trajectory_execution_action_server
+  backhoe_change_pose_action_server
   backhoe_trajectory_execution_action_client
   DESTINATION lib/${PROJECT_NAME})
 
