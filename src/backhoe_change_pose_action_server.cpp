@@ -4,10 +4,20 @@ using namespace tms_if_for_opera;
 
 BackhoeChangePoseActionServer::BackhoeChangePoseActionServer(const rclcpp::NodeOptions& options)
   : Node("backhoe_change_pose_action_server", options)
-  , planning_group("manipulator")  // TODO: Fix not to set planning_group here
-  , excavator_ik_("/home/common/pwri_ws/src/zx200_ros2/zx200_description/urdf/zx200.urdf")  // TODO: Fix not to set
-                                                                                            // urdf_path here
 {
+  this->declare_parameter<std::string>("robot_description", "");
+  this->get_parameter("robot_description", robot_description_);
+  RCLCPP_INFO(this->get_logger(), "Robot description: %s", robot_description_.c_str());
+  excavator_ik_.loadURDF(robot_description_);
+
+  this->declare_parameter<std::string>("planning_group", "");
+  this->get_parameter("planning_group", planning_group_);
+  RCLCPP_INFO(this->get_logger(), "Planning group: %s", planning_group_.c_str());
+
+  this->declare_parameter<std::string>("collision_object_component_name", "");
+  this->get_parameter("collision_object_component_name", collision_object_component_name_);
+  RCLCPP_INFO(this->get_logger(), "Collision object component name: %s", collision_object_component_name_.c_str());
+
   /* Create server */
   RCLCPP_INFO(this->get_logger(), "Create server.");  // debug
   using namespace std::placeholders;
@@ -27,7 +37,7 @@ BackhoeChangePoseActionServer::BackhoeChangePoseActionServer(const rclcpp::NodeO
   executor.add_node(move_group_node_);
   std::thread([this]() { executor.spin(); }).detach();
 
-  move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, planning_group);
+  move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, planning_group_);
   // moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
 
   // Get robot info
@@ -77,7 +87,7 @@ void BackhoeChangePoseActionServer::handle_accepted(const std::shared_ptr<GoalHa
 void BackhoeChangePoseActionServer::execute(const std::shared_ptr<GoalHandleBackhoeChangePose> goal_handle)
 {
   // Apply collision object
-  apply_collision_objects_from_db("collision_objects_1");
+  apply_collision_objects_from_db(collision_object_component_name_);
 
   // Execute goal
   RCLCPP_INFO(this->get_logger(), "Executing goal");
@@ -261,7 +271,7 @@ void BackhoeChangePoseActionServer::apply_collision_objects_from_db(const std::s
     // Get collision object type
     shape_msgs::msg::SolidPrimitive primitive;
     primitive.type = co["primitive_type"].get_int32().value;
-    RCLCPP_INFO(this->get_logger(), "primitive type: %d", primitive.type);
+    // RCLCPP_INFO(this->get_logger(), "primitive type: %d", primitive.type);
     // for (auto dimension : co["dimensions"].get_array().value)
     // {
     //   primitive.dimensions.push_back(getDoubleValue(dimension));

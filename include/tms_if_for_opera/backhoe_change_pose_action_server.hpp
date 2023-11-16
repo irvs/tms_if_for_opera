@@ -44,10 +44,13 @@ public:
   explicit BackhoeChangePoseActionServer(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
 
 private:
+  std::string planning_group_;
+  std::string robot_description_;
+  std::string collision_object_component_name_;
+
   rclcpp_action::Server<BackhoeChangePose>::SharedPtr action_server_;
   rclcpp::Node::SharedPtr move_group_node_;
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
-  const std::string planning_group;
   rclcpp::executors::SingleThreadedExecutor executor;
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
   // std::vector<double> current_joint_values_;

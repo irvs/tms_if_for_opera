@@ -70,6 +70,11 @@ foreach(TARGET ${TARGETS})
   install(TARGETS ${TARGET} DESTINATION lib/${PROJECT_NAME})
 endforeach()
 
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}/
+)
+
 # if(BUILD_TESTING)
 #   find_package(ament_cmake_gtest REQUIRED)
 #   ament_add_gtest(test_backhoe_change_pose_action_server test/test_backhoe_change_pose_action_server.cpp)
