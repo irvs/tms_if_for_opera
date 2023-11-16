@@ -1,314 +1,330 @@
-#include <functional>
-#include <memory>
-#include <thread>
+#include "tms_if_for_opera/backhoe_change_pose_action_server.hpp"
 
-#include "rclcpp/rclcpp.hpp"
-#include "rclcpp_action/rclcpp_action.hpp"
-// #include "rclcpp_components/register_node_macro.hpp"
+using namespace tms_if_for_opera;
 
-#include "tms_if_for_opera/visibility_control.h"
-#include "tms_msg_ts/action/tms_ts_backhoe_change_pose.hpp"
-
-/** Moveit! **/
-#include <moveit/move_group_interface/move_group_interface.h>
-#include <moveit/planning_scene_interface/planning_scene_interface.h>
-
-#include <moveit_msgs/msg/display_robot_state.hpp>
-#include <moveit_msgs/msg/display_trajectory.hpp>
-
-#include <moveit_msgs/msg/attached_collision_object.hpp>
-#include <moveit_msgs/msg/collision_object.hpp>
-
-#include <moveit/macros/console_colors.h>
-/*****/
-
-#include <excavator_ik/excavator_ik.hpp>
-
-namespace tms_if_for_opera
+BackhoeChangePoseActionServer::BackhoeChangePoseActionServer(const rclcpp::NodeOptions& options)
+  : Node("backhoe_change_pose_action_server", options)
+  , planning_group("manipulator")  // TODO: Fix not to set planning_group here
+  , excavator_ik_("/home/common/pwri_ws/src/zx200_ros2/zx200_description/urdf/zx200.urdf")  // TODO: Fix not to set
+                                                                                            // urdf_path here
 {
-class BackhoeChangePoseActionServer : public rclcpp::Node
+  /* Create server */
+  RCLCPP_INFO(this->get_logger(), "Create server.");  // debug
+  using namespace std::placeholders;
+
+  action_server_ = rclcpp_action::create_server<BackhoeChangePose>(
+      this, "backhoe_change_pose", std::bind(&BackhoeChangePoseActionServer::handle_goal, this, _1, _2),
+      std::bind(&BackhoeChangePoseActionServer::handle_cancel, this, _1),
+      std::bind(&BackhoeChangePoseActionServer::handle_accepted, this, _1));
+  /****/
+
+  /* Setup movegroup interface */
+  rclcpp::NodeOptions node_options;
+  node_options.automatically_declare_parameters_from_overrides(true);
+  move_group_node_ = rclcpp::Node::make_shared(std::string(this->get_name()) + "_move_group");
+
+  // robot の状態監視のため
+  executor.add_node(move_group_node_);
+  std::thread([this]() { executor.spin(); }).detach();
+
+  move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, planning_group);
+  // moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
+
+  // Get robot info
+  joint_names_ = move_group_->getJointNames();
+
+  // Init DB connection
+  mongocxx::instance instance{};
+
+  /*** debug ***/
+
+  // RCLCPP_INFO(this->get_logger(), "Planning frame: %s", move_group_->getPlanningFrame().c_str());
+  // RCLCPP_INFO(this->get_logger(), "End effector link: %s", move_group_->getEndEffectorLink().c_str());
+  // RCLCPP_INFO(this->get_logger(), "Available Planning Groups:");
+  // std::copy(move_group_->getJointModelGroupNames().begin(), move_group_->getJointModelGroupNames().end(),
+  //           std::ostream_iterator<std::string>(std::cout, ", "));
+  // RCLCPP_INFO(this->get_logger(), "Joint Names:");
+  // std::copy(move_group_->getJointNames().begin(), move_group_->getJointNames().end(),
+  //           std::ostream_iterator<std::string>(std::cout, ", "));
+
+  /******/
+}
+
+rclcpp_action::GoalResponse BackhoeChangePoseActionServer::handle_goal(
+    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const BackhoeChangePose::Goal> goal)
 {
-public:
-  using BackhoeChangePose = tms_msg_ts::action::TmsTsBackhoeChangePose;
-  using GoalHandleBackhoeChangePose = rclcpp_action::ServerGoalHandle<BackhoeChangePose>;
+  RCLCPP_INFO(this->get_logger(), "Received goal request");
+  (void)uuid;
+  return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+}
 
-  explicit BackhoeChangePoseActionServer(const rclcpp::NodeOptions& options = rclcpp::NodeOptions())
-    : Node("backhoe_change_pose_action_server", options)
-    , planning_group("manipulator")  // TODO: Fix not to set planning_group here
-    , excavator_ik_("/home/common/pwri_ws/src/zx200_ros2/zx200_description/urdf/zx200.urdf")  // TODO: Fix not to set
-                                                                                              // urdf_path here
+rclcpp_action::CancelResponse
+BackhoeChangePoseActionServer::handle_cancel(const std::shared_ptr<GoalHandleBackhoeChangePose> goal_handle)
+{
+  RCLCPP_INFO(this->get_logger(), "Received request to cancel goal");
+  (void)goal_handle;
+  return rclcpp_action::CancelResponse::ACCEPT;
+}
 
+void BackhoeChangePoseActionServer::handle_accepted(const std::shared_ptr<GoalHandleBackhoeChangePose> goal_handle)
+{
+  RCLCPP_INFO(this->get_logger(), "handle_accepted() start.");
+  using namespace std::placeholders;
+  // this needs to return quickly to avoid blocking the executor, so spin up a new thread
+  std::thread{ std::bind(&BackhoeChangePoseActionServer::execute, this, _1), goal_handle }.detach();
+}
+
+void BackhoeChangePoseActionServer::execute(const std::shared_ptr<GoalHandleBackhoeChangePose> goal_handle)
+{
+  // Apply collision object
+  apply_collision_objects_from_db("collision_objects_1");
+
+  // Execute goal
+  RCLCPP_INFO(this->get_logger(), "Executing goal");
+
+  const auto goal = goal_handle->get_goal();
+  auto feedback = std::make_shared<BackhoeChangePose::Feedback>();
+  auto result = std::make_shared<BackhoeChangePose::Result>();
+
+  feedback->state = "IDLE";
+  goal_handle->publish_feedback(feedback);
+
+  // Get current joint values
+  std::vector<double> joint_values = move_group_->getCurrentJointValues();
+  for (size_t i = 0; i < joint_names_.size() && i < joint_values.size(); i++)
   {
-    /* Create server */
-    RCLCPP_INFO(this->get_logger(), "Create server.");  // debug
-    using namespace std::placeholders;
-
-    action_server_ = rclcpp_action::create_server<BackhoeChangePose>(
-        this, "backhoe_change_pose", std::bind(&BackhoeChangePoseActionServer::handle_goal, this, _1, _2),
-        std::bind(&BackhoeChangePoseActionServer::handle_cancel, this, _1),
-        std::bind(&BackhoeChangePoseActionServer::handle_accepted, this, _1));
-    /****/
-
-    /* Setup movegroup interface */
-    // thisをshared_ptrに変換する良さげな方法が見つからないため、渋々ノード生成
-    rclcpp::NodeOptions node_options;
-    node_options.automatically_declare_parameters_from_overrides(true);
-    move_group_node_ = rclcpp::Node::make_shared(std::string(this->get_name()) + "_move_group");
-
-    // robot の状態監視のため
-    executor.add_node(move_group_node_);
-    std::thread([this]() { executor.spin(); }).detach();
-
-    move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, planning_group);
-    moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
-
-    // Get robot info
-    joint_names_ = move_group_->getJointNames();
-
-    /*** debug ***/
-
-    // RCLCPP_INFO(this->get_logger(), "Planning frame: %s", move_group_->getPlanningFrame().c_str());
-    // RCLCPP_INFO(this->get_logger(), "End effector link: %s", move_group_->getEndEffectorLink().c_str());
-    // RCLCPP_INFO(this->get_logger(), "Available Planning Groups:");
-    // std::copy(move_group_->getJointModelGroupNames().begin(), move_group_->getJointModelGroupNames().end(),
-    //           std::ostream_iterator<std::string>(std::cout, ", "));
-    // RCLCPP_INFO(this->get_logger(), "Joint Names:");
-    // std::copy(move_group_->getJointNames().begin(), move_group_->getJointNames().end(),
-    //           std::ostream_iterator<std::string>(std::cout, ", "));
-
-    /******/
+    current_joint_values_[joint_names_[i]] = joint_values[i];
+    // target_joint_values_[joint_names_[i]] = joint_values[i];
   }
 
-private:
-  rclcpp_action::Server<BackhoeChangePose>::SharedPtr action_server_;
-  rclcpp::Node::SharedPtr move_group_node_;
-  std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
-  const std::string planning_group;
-  rclcpp::executors::SingleThreadedExecutor executor;
-  // std::vector<double> current_joint_values_;
-  std::vector<std::string> joint_names_;
-  std::map<std::string, double> current_joint_values_;
-  // std::map<std::string, double> target_joint_values_;
-  ExcavatorIK excavator_ik_;
-
-  rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID& uuid,
-                                          std::shared_ptr<const BackhoeChangePose::Goal> goal)
+  // Planning
+  // TODO: Fix to connect wayponts smoothly
+  if (goal->trajectory.points.size() > 0 && goal->pose_sequence.size() == 0 &&
+      goal->position_with_angle_sequence.size() == 0)
   {
-    RCLCPP_INFO(this->get_logger(), "Received goal request");
-    (void)uuid;
-    return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
-  }
-
-  rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandleBackhoeChangePose> goal_handle)
-  {
-    RCLCPP_INFO(this->get_logger(), "Received request to cancel goal");
-    (void)goal_handle;
-    return rclcpp_action::CancelResponse::ACCEPT;
-  }
-
-  void handle_accepted(const std::shared_ptr<GoalHandleBackhoeChangePose> goal_handle)
-  {
-    RCLCPP_INFO(this->get_logger(), "handle_accepted() start.");
-    using namespace std::placeholders;
-    // this needs to return quickly to avoid blocking the executor, so spin up a new thread
-    std::thread{ std::bind(&BackhoeChangePoseActionServer::execute, this, _1), goal_handle }.detach();
-  }
-
-  void execute(const std::shared_ptr<GoalHandleBackhoeChangePose> goal_handle)
-  {
-    RCLCPP_INFO(this->get_logger(), "Executing goal");
-
-    const auto goal = goal_handle->get_goal();
-    auto feedback = std::make_shared<BackhoeChangePose::Feedback>();
-    auto result = std::make_shared<BackhoeChangePose::Result>();
-
-    feedback->state = "IDLE";
-    goal_handle->publish_feedback(feedback);
-
-    // Get current joint values
-    std::vector<double> joint_values = move_group_->getCurrentJointValues();
-    for (size_t i = 0; i < joint_names_.size() && i < joint_values.size(); i++)
+    for (const auto& point : goal->trajectory.points)
     {
-      current_joint_values_[joint_names_[i]] = joint_values[i];
-      // target_joint_values_[joint_names_[i]] = joint_values[i];
-    }
-
-    // Planning
-    // TODO: Fix to connect wayponts smoothly
-    if (goal->trajectory.points.size() > 0 && goal->pose_sequence.size() == 0 &&
-        goal->position_with_angle_sequence.size() == 0)
-    {
-      for (const auto& point : goal->trajectory.points)
+      std::map<std::string, double> target_joint_values;
+      for (size_t i = 0; i < goal->trajectory.joint_names.size() && i < point.positions.size(); ++i)
       {
-        std::map<std::string, double> target_joint_values;
-        for (size_t i = 0; i < goal->trajectory.joint_names.size() && i < point.positions.size(); ++i)
+        if (fabs(point.positions[i]) > 2.0 * M_PI)
         {
-          if (fabs(point.positions[i]) > 2.0 * M_PI)
-          {
-            target_joint_values[goal->trajectory.joint_names[i]] =
-                current_joint_values_[goal->trajectory.joint_names[i]];
-          }
-          else
-          {
-            target_joint_values[goal->trajectory.joint_names[i]] = point.positions[i];
-          }
-        }
-        move_group_->setJointValueTarget(target_joint_values);
-
-        feedback->state = "PLANNING";
-        goal_handle->publish_feedback(feedback);
-
-        if (move_group_->move() == moveit::planning_interface::MoveItErrorCode::SUCCESS)
-        {
-          feedback->state = "SUCCEEDED";
-          goal_handle->publish_feedback(feedback);
-          result->error_code.val = 1;
-          // goal_handle->succeed(result);
+          target_joint_values[goal->trajectory.joint_names[i]] = current_joint_values_[goal->trajectory.joint_names[i]];
         }
         else
-        {  // Failed
-          feedback->state = "ABORTED";
-          goal_handle->publish_feedback(feedback);
-          result->error_code.val = 9999;
-          goal_handle->abort(result);
-
-          break;
+        {
+          target_joint_values[goal->trajectory.joint_names[i]] = point.positions[i];
         }
       }
-    }
-    else if (goal->pose_sequence.size() > 0 && goal->trajectory.points.size() == 0 &&
-             goal->position_with_angle_sequence.size() == 0)
-    {
-      for (const auto& pose : goal->pose_sequence)
-      {
-        move_group_->setPoseTarget(pose);
+      move_group_->setJointValueTarget(target_joint_values);
 
-        feedback->state = "PLANNING";
-        goal_handle->publish_feedback(feedback);
-
-        if (move_group_->move() == moveit::planning_interface::MoveItErrorCode::SUCCESS)
-        {
-          feedback->state = "SUCCEEDED";
-          goal_handle->publish_feedback(feedback);
-          result->error_code.val = 1;
-          // goal_handle->succeed(result);
-        }
-        else
-        {  // Failed
-          feedback->state = "ABORTED";
-          goal_handle->publish_feedback(feedback);
-          result->error_code.val = 9999;
-          goal_handle->abort(result);
-
-          break;
-        }
-      }
-    }
-    else if (goal->position_with_angle_sequence.size() > 0 && goal->trajectory.points.size() == 0 &&
-             goal->pose_sequence.size() == 0)
-    {
-      for (const auto& point : goal->position_with_angle_sequence)
-      {
-        std::vector<double> target_joint_values(joint_names_.size(), 0.0);
-        if (excavator_ik_.inverseKinematics4Dof(point.position.x, point.position.y, point.position.z, point.theta_w,
-                                                target_joint_values) == -1)
-        {
-          RCLCPP_INFO(this->get_logger(), "Failed to calculate inverse kinematics");
-          feedback->state = "ABORTED";
-          result->error_code.val = 9999;
-          break;
-        }
-
-        move_group_->setJointValueTarget(target_joint_values);
-
-        feedback->state = "PLANNING";
-        goal_handle->publish_feedback(feedback);
-
-        if (move_group_->move() == moveit::planning_interface::MoveItErrorCode::SUCCESS)
-        {
-          feedback->state = "SUCCEEDED";
-          goal_handle->publish_feedback(feedback);
-          result->error_code.val = 1;
-          // goal_handle->succeed(result);
-        }
-        else
-        {  // Failed
-          feedback->state = "ABORTED";
-          goal_handle->publish_feedback(feedback);
-          result->error_code.val = 9999;
-          goal_handle->abort(result);
-
-          break;
-        }
-      }
-    }
-    else
-    {
-      RCLCPP_INFO(this->get_logger(), "No or too much input.");
-      feedback->state = "ABORTED";
+      feedback->state = "PLANNING";
       goal_handle->publish_feedback(feedback);
-      result->error_code.val = 9999;
-      goal_handle->abort(result);
-    }
 
-    // moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+      if (move_group_->move() == moveit::planning_interface::MoveItErrorCode::SUCCESS)
+      {
+        feedback->state = "SUCCEEDED";
+        goal_handle->publish_feedback(feedback);
+        result->error_code.val = 1;
+        // goal_handle->succeed(result);
+      }
+      else
+      {  // Failed
+        feedback->state = "ABORTED";
+        goal_handle->publish_feedback(feedback);
+        result->error_code.val = 9999;
+        goal_handle->abort(result);
 
-    // feedback->state = "PLANNING";
-    // goal_handle->publish_feedback(feedback);
-
-    // bool success = (move_group_->plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
-    // if (success)
-    // {
-    //   feedback->state = "EXECUTING";
-    //   goal_handle->publish_feedback(feedback);
-
-    //   auto moveit_result = move_group_->execute(my_plan);
-
-    //   // Check the result of the execution.
-    //   if (moveit_result == moveit::planning_interface::MoveItErrorCode::SUCCESS)
-    //   {
-    //     // Create a result message.
-    //     result->error_code.val = 1;
-    //     RCLCPP_INFO(this->get_logger(), "Execution succeeded");
-
-    //     feedback->state = "SUCCEEDED";
-    //     goal_handle->publish_feedback(feedback);
-    //   }
-    //   else
-    //   {
-    //     result->error_code.val = 9999;
-    //     RCLCPP_ERROR(this->get_logger(), "Execution failed");
-
-    //     feedback->state = "FAILED";
-    //     goal_handle->publish_feedback(feedback);
-    //     break;
-    //   }
-    // }
-    // else
-    // {
-    //   feedback->state = "ABORTED";
-    //   goal_handle->publish_feedback(feedback);
-    // }
-
-    // If execution was successful, set the result of the action and mark it as succeeded.
-    if (result->error_code.val == 1)
-    {
-      RCLCPP_INFO(this->get_logger(), "Goal succeeded");
-      goal_handle->succeed(result);
-    }
-    else
-    {
-      RCLCPP_INFO(this->get_logger(), "Goal aborted");
-      goal_handle->abort(result);
+        break;
+      }
     }
   }
-};
-}  // namespace tms_if_for_opera
+  else if (goal->pose_sequence.size() > 0 && goal->trajectory.points.size() == 0 &&
+           goal->position_with_angle_sequence.size() == 0)
+  {
+    for (const auto& pose : goal->pose_sequence)
+    {
+      move_group_->setPoseTarget(pose);
+
+      feedback->state = "PLANNING";
+      goal_handle->publish_feedback(feedback);
+
+      if (move_group_->move() == moveit::planning_interface::MoveItErrorCode::SUCCESS)
+      {
+        feedback->state = "SUCCEEDED";
+        goal_handle->publish_feedback(feedback);
+        result->error_code.val = 1;
+        // goal_handle->succeed(result);
+      }
+      else
+      {  // Failed
+        feedback->state = "ABORTED";
+        goal_handle->publish_feedback(feedback);
+        result->error_code.val = 9999;
+        goal_handle->abort(result);
+
+        break;
+      }
+    }
+  }
+  else if (goal->position_with_angle_sequence.size() > 0 && goal->trajectory.points.size() == 0 &&
+           goal->pose_sequence.size() == 0)
+  {
+    for (const auto& point : goal->position_with_angle_sequence)
+    {
+      std::vector<double> target_joint_values(joint_names_.size(), 0.0);
+      if (excavator_ik_.inverseKinematics4Dof(point.position.x, point.position.y, point.position.z, point.theta_w,
+                                              target_joint_values) == -1)
+      {
+        RCLCPP_INFO(this->get_logger(), "Failed to calculate inverse kinematics");
+        feedback->state = "ABORTED";
+        result->error_code.val = 9999;
+        break;
+      }
+
+      move_group_->setJointValueTarget(target_joint_values);
+
+      feedback->state = "PLANNING";
+      goal_handle->publish_feedback(feedback);
+
+      if (move_group_->move() == moveit::planning_interface::MoveItErrorCode::SUCCESS)
+      {
+        feedback->state = "SUCCEEDED";
+        goal_handle->publish_feedback(feedback);
+        result->error_code.val = 1;
+        // goal_handle->succeed(result);
+      }
+      else
+      {  // Failed
+        feedback->state = "ABORTED";
+        goal_handle->publish_feedback(feedback);
+        result->error_code.val = 9999;
+        goal_handle->abort(result);
+
+        break;
+      }
+    }
+  }
+  else
+  {
+    RCLCPP_INFO(this->get_logger(), "No or too much input.");
+    feedback->state = "ABORTED";
+    goal_handle->publish_feedback(feedback);
+    result->error_code.val = 9999;
+    goal_handle->abort(result);
+  }
+
+  // If execution was successful, set the result of the action and mark it as succeeded.
+  if (result->error_code.val == 1)
+  {
+    RCLCPP_INFO(this->get_logger(), "Goal succeeded");
+    goal_handle->succeed(result);
+  }
+  else
+  {
+    RCLCPP_INFO(this->get_logger(), "Goal aborted");
+    goal_handle->abort(result);
+  }
+}
+
+void BackhoeChangePoseActionServer::apply_collision_objects_from_db(const std::string& component_name)
+{
+  // Load collision objects from DB
+  // RCLCPP_INFO(this->get_logger(), "Loading collision objects from DB");
+
+  mongocxx::client client{ mongocxx::uri{ "mongodb://localhost:27017" } };
+  mongocxx::database db = client["rostmsdb"];
+  mongocxx::collection collection = db["parameter"];
+  bsoncxx::builder::stream::document filter_builder;
+  filter_builder << "component_name" << component_name;
+  auto filter = filter_builder.view();
+  auto result = collection.find_one(filter);
+
+  if (!result)
+  {
+    RCLCPP_ERROR(this->get_logger(), "Failed to get collision objects from DB");
+    return;
+  }
+  else
+  {
+    RCLCPP_INFO(this->get_logger(), "Succeeded to get collision objects from DB");
+  }
+
+  auto collision_objects = result->view()["collision_objects"].get_array().value;
+
+  for (auto&& co : collision_objects)
+  {
+    moveit_msgs::msg::CollisionObject co_msg;
+    co_msg.header.frame_id = move_group_->getPlanningFrame();
+    co_msg.id = co["id"].get_utf8().value.to_string();
+
+    // Get collision object type
+    shape_msgs::msg::SolidPrimitive primitive;
+    primitive.type = co["primitive_type"].get_int32().value;
+    RCLCPP_INFO(this->get_logger(), "primitive type: %d", primitive.type);
+    // for (auto dimension : co["dimensions"].get_array().value)
+    // {
+    //   primitive.dimensions.push_back(getDoubleValue(dimension));
+    // }
+    for (auto dimension : co["dimensions"].get_array().value)
+    {
+      if (dimension.type() == bsoncxx::type::k_double)
+      {
+        primitive.dimensions.push_back(dimension.get_double().value);
+      }
+      else if (dimension.type() == bsoncxx::type::k_int32)
+      {
+        primitive.dimensions.push_back(static_cast<double>(dimension.get_int32().value));
+      }
+      else
+      {
+        throw std::runtime_error("Unsupported type");
+      }
+      // bsoncxx::document::element dimensionElement = *dimension.get_document().view().begin();
+      // primitive.dimensions.push_back(getDoubleValue(dimensionElement));
+      // primitive.dimensions.push_back(getDoubleValue(dimension));
+    }
+
+    co_msg.primitives.push_back(primitive);
+
+    // Get collision object pose
+    geometry_msgs::msg::Pose pose;
+    pose.position.x = getDoubleValue(co["pose"]["position"]["x"]);
+    pose.position.y = getDoubleValue(co["pose"]["position"]["y"]);
+    pose.position.z = getDoubleValue(co["pose"]["position"]["z"]);
+    pose.orientation.x = getDoubleValue(co["pose"]["orientation"]["x"]);
+    pose.orientation.y = getDoubleValue(co["pose"]["orientation"]["y"]);
+    pose.orientation.z = getDoubleValue(co["pose"]["orientation"]["z"]);
+    pose.orientation.w = getDoubleValue(co["pose"]["orientation"]["w"]);
+
+    co_msg.primitive_poses.push_back(pose);
+
+    co_msg.operation = co_msg.ADD;
+
+    planning_scene_interface_.applyCollisionObject(co_msg);
+  }
+}
+
+double BackhoeChangePoseActionServer::getDoubleValue(const bsoncxx::document::element& element)
+{
+  if (element.type() == bsoncxx::type::k_double)
+  {
+    return element.get_double().value;
+  }
+  else if (element.type() == bsoncxx::type::k_int32)
+  {
+    return static_cast<double>(element.get_int32().value);
+  }
+  else
+  {
+    throw std::runtime_error("Unsupported type");
+  }
+}
 
 int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<tms_if_for_opera::BackhoeChangePoseActionServer>());
+  rclcpp::spin(std::make_shared<BackhoeChangePoseActionServer>());
   rclcpp::shutdown();
   return 0;
 }

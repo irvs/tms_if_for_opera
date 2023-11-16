@@ -10,54 +10,73 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+set(TARGETS
+  # backhoe_trajectory_execution_action_server
+  backhoe_change_pose_action_server
+)
+
 find_package(ament_cmake REQUIRED)
 find_package(tms_msg_ts REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
+# find_package(shape_msgs REQUIRED)
 
 find_package(moveit_common REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(rosidl_default_runtime REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
+find_package(bsoncxx REQUIRED)
+find_package(mongocxx REQUIRED)
 
 find_package(excavator_ik REQUIRED)
 
-add_executable(backhoe_trajectory_execution_action_server src/backhoe_trajectory_execution_action_server.cpp)
-ament_target_dependencies(backhoe_trajectory_execution_action_server
+set(COMMON_DEPENDENCIES
   "rclcpp"
   "rclcpp_action"
-  "tms_msg_ts"
   "moveit_common"
   "moveit_ros_planning_interface"
   "rosidl_default_runtime"
-  "Boost")
-target_include_directories(backhoe_trajectory_execution_action_server PRIVATE include)
-
-add_executable(backhoe_change_pose_action_server src/backhoe_change_pose_action_server.cpp)
-ament_target_dependencies(backhoe_change_pose_action_server
-  "rclcpp"
-  "rclcpp_action"
-  "tms_msg_ts"
-  "moveit_common"
-  "moveit_ros_planning_interface"
-  "rosidl_default_runtime"
+  # "shape_msgs"
+  
   "Boost"
-  "excavator_ik")
-target_include_directories(backhoe_change_pose_action_server PRIVATE include)
+  "mongocxx"
+  "bsoncxx"
 
-add_executable(backhoe_trajectory_execution_action_client src/backhoe_trajectory_execution_action_client.cpp)
-ament_target_dependencies(backhoe_trajectory_execution_action_client
-  "rclcpp"
-  "rclcpp_action"
+  "excavator_ik"
   "tms_msg_ts"
 )
-target_include_directories(backhoe_trajectory_execution_action_client PRIVATE include)
 
+set(COMMON_INCLUDE_DIRS
+  include
+  /usr/local/include/mongocxx/v_noabi
+  /usr/local/include/bsoncxx/v_noabi
+)
 
-install(TARGETS
-  backhoe_trajectory_execution_action_server
-  backhoe_change_pose_action_server
-  backhoe_trajectory_execution_action_client
-  DESTINATION lib/${PROJECT_NAME})
+set(COMMON_LINK_DIRS
+  /usr/local/lib
+)
+
+set(COMMON_LINK_LIBS
+  mongocxx
+  bsoncxx
+)
+
+foreach(TARGET ${TARGETS})
+  add_executable(${TARGET} src/${TARGET}.cpp)
+  ament_target_dependencies(${TARGET} ${COMMON_DEPENDENCIES})
+  target_include_directories(${TARGET} PRIVATE ${COMMON_INCLUDE_DIRS})
+  target_link_directories(${TARGET} PUBLIC ${COMMON_LINK_DIRS})
+  target_link_libraries(${TARGET} ${COMMON_LINK_LIBS})
+  install(TARGETS ${TARGET} DESTINATION lib/${PROJECT_NAME})
+endforeach()
+
+# if(BUILD_TESTING)
+#   find_package(ament_cmake_gtest REQUIRED)
+#   ament_add_gtest(test_backhoe_change_pose_action_server test/test_backhoe_change_pose_action_server.cpp)
+#   ament_target_dependencies(test_backhoe_change_pose_action_server ${COMMON_DEPENDENCIES})
+#   target_include_directories(test_backhoe_change_pose_action_server PRIVATE ${COMMON_INCLUDE_DIRS})
+#   target_link_directories(test_backhoe_change_pose_action_server PUBLIC ${COMMON_LINK_DIRS})
+#   target_link_libraries(test_backhoe_change_pose_action_server ${COMMON_LINK_LIBS})
+# endif()
 
 ament_package()
