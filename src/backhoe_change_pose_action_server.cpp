@@ -135,7 +135,8 @@ private:
 
     // Planning
     // TODO: Fix to connect wayponts smoothly
-    if (goal->trajectory.points.size() > 0)
+    if (goal->trajectory.points.size() > 0 && goal->pose_sequence.size() == 0 &&
+        goal->position_with_angle_sequence.size() == 0)
     {
       for (const auto& point : goal->trajectory.points)
       {
@@ -175,7 +176,8 @@ private:
         }
       }
     }
-    else if (goal->pose_sequence.size() > 0)
+    else if (goal->pose_sequence.size() > 0 && goal->trajectory.points.size() == 0 &&
+             goal->position_with_angle_sequence.size() == 0)
     {
       for (const auto& pose : goal->pose_sequence)
       {
@@ -202,7 +204,8 @@ private:
         }
       }
     }
-    else if (goal->position_with_angle_sequence.size() > 0)
+    else if (goal->position_with_angle_sequence.size() > 0 && goal->trajectory.points.size() == 0 &&
+             goal->pose_sequence.size() == 0)
     {
       for (const auto& point : goal->position_with_angle_sequence)
       {
@@ -238,6 +241,14 @@ private:
           break;
         }
       }
+    }
+    else
+    {
+      RCLCPP_INFO(this->get_logger(), "No or too much input.");
+      feedback->state = "ABORTED";
+      goal_handle->publish_feedback(feedback);
+      result->error_code.val = 9999;
+      goal_handle->abort(result);
     }
 
     // moveit::planning_interface::MoveGroupInterface::Plan my_plan;
