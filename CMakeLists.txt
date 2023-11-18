@@ -13,6 +13,7 @@ endif()
 set(TARGETS
   # backhoe_trajectory_execution_action_server
   backhoe_change_pose_action_server
+  backhoe_excavate_simple_action_server
 )
 
 find_package(ament_cmake REQUIRED)

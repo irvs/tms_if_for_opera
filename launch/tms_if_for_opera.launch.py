@@ -40,13 +40,24 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_component_name': LaunchConfiguration('collision_object_component_name')}
         ])
+    
+    backhoe_excavate_simple_action_server_node = Node(
+        package='tms_if_for_opera',
+        executable='backhoe_excavate_simple_action_server',
+        parameters=[
+            {'robot_description': robot_description_content},
+            {'planning_group': LaunchConfiguration('planning_group')},
+            {'collision_object_component_name': LaunchConfiguration('collision_object_component_name')}
+        ])
 
     # Build the launch description
     ld = LaunchDescription([
         declare_robot_description_arg,
         declare_planning_group_arg,
         declare_collision_object_component_name_arg,
-        backhoe_change_pose_action_server_node
+        
+        backhoe_change_pose_action_server_node,
+        backhoe_excavate_simple_action_server_node
     ])
 
     return ld
