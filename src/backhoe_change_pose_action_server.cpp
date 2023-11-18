@@ -34,8 +34,8 @@ BackhoeChangePoseActionServer::BackhoeChangePoseActionServer(const rclcpp::NodeO
   move_group_node_ = rclcpp::Node::make_shared(std::string(this->get_name()) + "_move_group");
 
   // robot の状態監視のため
-  executor.add_node(move_group_node_);
-  std::thread([this]() { executor.spin(); }).detach();
+  executor_.add_node(move_group_node_);
+  std::thread([this]() { executor_.spin(); }).detach();
 
   move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, planning_group_);
   // moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;

@@ -51,7 +51,7 @@ private:
   rclcpp_action::Server<BackhoeChangePose>::SharedPtr action_server_;
   rclcpp::Node::SharedPtr move_group_node_;
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
-  rclcpp::executors::SingleThreadedExecutor executor;
+  rclcpp::executors::SingleThreadedExecutor executor_;
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
   // std::vector<double> current_joint_values_;
   std::vector<std::string> joint_names_;
