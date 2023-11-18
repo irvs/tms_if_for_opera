@@ -166,8 +166,12 @@ void BackhoeExcavateSimpleActionServer::apply_collision_objects_from_db(const st
     RCLCPP_INFO(this->get_logger(), "Succeeded to get collision objects from DB");
   }
 
-  auto collision_objects = result->view()["collision_objects"].get_array().value;
+  // Remove all collision objects
+  std::vector<std::string> object_ids = planning_scene_interface_.getKnownObjectNames();
+  planning_scene_interface_.removeCollisionObjects(object_ids);
 
+  // Apply collision objects
+  auto collision_objects = result->view()["collision_objects"].get_array().value;
   for (auto&& co : collision_objects)
   {
     moveit_msgs::msg::CollisionObject co_msg;
