@@ -252,7 +252,7 @@ void BackhoeChangePoseActionServer::apply_collision_objects_from_db(const std::s
   auto filter = filter_builder.view();
   auto result = collection.find_one(filter);
 
-  if (!result)
+  if ((component_name != "") && !result)
   {
     RCLCPP_ERROR(this->get_logger(), "Failed to get collision objects from DB");
     return;

@@ -25,7 +25,7 @@ def generate_launch_description():
 
     declare_collision_object_component_name_arg = DeclareLaunchArgument(
         'collision_object_component_name',
-        default_value='collision_objects_2',
+        default_value='collision_objects_3',
         description='The collision object component name')
 
     # Use xacro package to convert xacro file to URDF
