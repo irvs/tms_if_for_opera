@@ -41,6 +41,7 @@ BackhoeChangePoseActionServer::BackhoeChangePoseActionServer(const rclcpp::NodeO
   // moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
 
   move_group_->setMaxVelocityScalingFactor(1.0);
+  move_group_->setMaxAccelerationScalingFactor(1.0);
 
   // Get robot info
   joint_names_ = move_group_->getJointNames();
