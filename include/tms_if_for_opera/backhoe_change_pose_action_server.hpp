@@ -24,6 +24,7 @@
 #include <moveit_msgs/msg/collision_object.hpp>
 
 #include <moveit/macros/console_colors.h>
+#include <moveit/robot_state/robot_state.h>
 /*****/
 
 #include <bsoncxx/json.hpp>
@@ -58,6 +59,7 @@ private:
   std::map<std::string, double> current_joint_values_;
   // std::map<std::string, double> target_joint_values_;
   ExcavatorIK excavator_ik_;
+  moveit::core::RobotStatePtr robot_state_;
 
   rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID& uuid,
                                           std::shared_ptr<const BackhoeChangePose::Goal> goal);

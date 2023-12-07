@@ -46,6 +46,9 @@ BackhoeChangePoseActionServer::BackhoeChangePoseActionServer(const rclcpp::NodeO
   // Get robot info
   joint_names_ = move_group_->getJointNames();
 
+  // For FK
+  robot_state_ = std::make_shared<moveit::core::RobotState>(move_group_->getRobotModel());
+
   // Init DB connection
   mongocxx::instance instance{};
 
@@ -195,7 +198,12 @@ void BackhoeChangePoseActionServer::execute(const std::shared_ptr<GoalHandleBack
         break;
       }
 
-      move_group_->setJointValueTarget(target_joint_values);
+      robot_state_->setJointGroupPositions(move_group_->getName(), target_joint_values);
+      robot_state_->update();
+      Eigen::Isometry3d end_effector_state = robot_state_->getGlobalLinkTransform(move_group_->getEndEffectorLink());
+
+      move_group_->setPoseTarget(end_effector_state);
+      // move_group_->setJointValueTarget(target_joint_values);
 
       feedback->state = "PLANNING";
       goal_handle->publish_feedback(feedback);
