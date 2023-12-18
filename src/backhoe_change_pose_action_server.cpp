@@ -1,5 +1,8 @@
 #include "tms_if_for_opera/backhoe_change_pose_action_server.hpp"
 
+#include <moveit_msgs/msg/constraints.hpp>
+#include <moveit_msgs/msg/orientation_constraint.hpp>
+
 using namespace tms_if_for_opera;
 
 BackhoeChangePoseActionServer::BackhoeChangePoseActionServer(const rclcpp::NodeOptions& options)
@@ -188,6 +191,7 @@ void BackhoeChangePoseActionServer::execute(const std::shared_ptr<GoalHandleBack
   {
     for (const auto& point : goal->position_with_angle_sequence)
     {
+      // Get end effector pose to use pose/position constraint
       std::vector<double> target_joint_values(joint_names_.size(), 0.0);
       if (excavator_ik_.inverseKinematics4Dof(point.position.x, point.position.y, point.position.z, point.theta_w,
                                               target_joint_values) == -1)
@@ -202,6 +206,23 @@ void BackhoeChangePoseActionServer::execute(const std::shared_ptr<GoalHandleBack
       robot_state_->update();
       Eigen::Isometry3d end_effector_state = robot_state_->getGlobalLinkTransform(move_group_->getEndEffectorLink());
 
+      // Set pose constraint
+      // moveit_msgs::msg::Constraints pose_constraints;
+      // moveit_msgs::msg::OrientationConstraint ocm;
+
+      // ocm.link_name = "end_effector_link";  // Replace with your end effector link name
+      // ocm.header.frame_id = "base_link";    // Replace with your base link name
+      // ocm.orientation.w = 1.0;              // Specify the desired orientation
+      // ocm.absolute_x_axis_tolerance = 0.1;
+      // ocm.absolute_y_axis_tolerance = 0.1;
+      // ocm.absolute_z_axis_tolerance = 0.1;
+      // ocm.weight = 1.0;
+
+      // pose_constraints.orientation_constraints.push_back(ocm);
+
+      // move_group_->setPathConstraints(pose_constraints);
+
+      // Set target pose
       move_group_->setPoseTarget(end_effector_state);
       // move_group_->setJointValueTarget(target_joint_values);
 
@@ -266,6 +287,11 @@ void BackhoeChangePoseActionServer::apply_collision_objects_from_db(const std::s
     RCLCPP_ERROR(this->get_logger(), "Failed to get collision objects from DB");
     return;
   }
+  else if (component_name == "")
+  {
+    RCLCPP_INFO(this->get_logger(), "No collision objects to load");
+    return;
+  }
   else
   {
     RCLCPP_INFO(this->get_logger(), "Succeeded to get collision objects from DB");
@@ -286,11 +312,6 @@ void BackhoeChangePoseActionServer::apply_collision_objects_from_db(const std::s
     // Get collision object type
     shape_msgs::msg::SolidPrimitive primitive;
     primitive.type = co["primitive_type"].get_int32().value;
-    // RCLCPP_INFO(this->get_logger(), "primitive type: %d", primitive.type);
-    // for (auto dimension : co["dimensions"].get_array().value)
-    // {
-    //   primitive.dimensions.push_back(getDoubleValue(dimension));
-    // }
     for (auto dimension : co["dimensions"].get_array().value)
     {
       if (dimension.type() == bsoncxx::type::k_double)
@@ -305,9 +326,6 @@ void BackhoeChangePoseActionServer::apply_collision_objects_from_db(const std::s
       {
         throw std::runtime_error("Unsupported type");
       }
-      // bsoncxx::document::element dimensionElement = *dimension.get_document().view().begin();
-      // primitive.dimensions.push_back(getDoubleValue(dimensionElement));
-      // primitive.dimensions.push_back(getDoubleValue(dimension));
     }
 
     co_msg.primitives.push_back(primitive);
