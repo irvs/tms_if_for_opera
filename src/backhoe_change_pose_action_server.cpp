@@ -2,6 +2,8 @@
 
 #include <moveit_msgs/msg/constraints.hpp>
 #include <moveit_msgs/msg/orientation_constraint.hpp>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 using namespace tms_if_for_opera;
 
@@ -45,6 +47,9 @@ BackhoeChangePoseActionServer::BackhoeChangePoseActionServer(const rclcpp::NodeO
 
   move_group_->setMaxVelocityScalingFactor(1.0);
   move_group_->setMaxAccelerationScalingFactor(1.0);
+  move_group_->setNumPlanningAttempts(100);
+  move_group_->setPlanningTime(60.0);
+  move_group_->setPlannerId("RRTConnectkConfigDefault");
 
   // Get robot info
   joint_names_ = move_group_->getJointNames();
@@ -98,6 +103,9 @@ void BackhoeChangePoseActionServer::execute(const std::shared_ptr<GoalHandleBack
   // Apply collision object
   apply_collision_objects_from_db(collision_object_component_name_);
 
+  // Clear constraints
+  move_group_->clearPathConstraints();
+
   // Execute goal
   RCLCPP_INFO(this->get_logger(), "Executing goal");
 
@@ -123,6 +131,7 @@ void BackhoeChangePoseActionServer::execute(const std::shared_ptr<GoalHandleBack
   {
     for (const auto& point : goal->trajectory.points)
     {
+      // TODO: Fix to use constraint
       std::map<std::string, double> target_joint_values;
       for (size_t i = 0; i < goal->trajectory.joint_names.size() && i < point.positions.size(); ++i)
       {
@@ -152,7 +161,6 @@ void BackhoeChangePoseActionServer::execute(const std::shared_ptr<GoalHandleBack
         feedback->state = "ABORTED";
         goal_handle->publish_feedback(feedback);
         result->error_code.val = 9999;
-        goal_handle->abort(result);
 
         break;
       }
@@ -180,7 +188,6 @@ void BackhoeChangePoseActionServer::execute(const std::shared_ptr<GoalHandleBack
         feedback->state = "ABORTED";
         goal_handle->publish_feedback(feedback);
         result->error_code.val = 9999;
-        goal_handle->abort(result);
 
         break;
       }
@@ -202,27 +209,43 @@ void BackhoeChangePoseActionServer::execute(const std::shared_ptr<GoalHandleBack
         break;
       }
 
+      // Set pose constraint
+      // Check if constraint exists
+      if (goal->constraints.joint_constraints.empty() && goal->constraints.position_constraints.empty() &&
+          goal->constraints.orientation_constraints.empty() && goal->constraints.visibility_constraints.empty())
+      {
+        RCLCPP_INFO(this->get_logger(), "Constraints do not exist");
+      }
+      else
+      {
+        RCLCPP_INFO(this->get_logger(), "Constraints exist");
+
+        // TODO: Add error handling
+        //       - Use constraint in joint space
+        //       - Constraint is not for end effector
+        if (goal->constraints.orientation_constraints.size() > 0)
+        {
+          RCLCPP_INFO(this->get_logger(), "Orientation constraint exists");
+          auto current_pose = move_group_->getCurrentPose();
+          moveit_msgs::msg::Constraints pose_constraints;
+          moveit_msgs::msg::OrientationConstraint ocm;
+          ocm.header.frame_id = move_group_->getPoseReferenceFrame();  // Replace with your base link name
+          ocm.link_name = move_group_->getEndEffectorLink();
+          // Specify the desired orientation
+          ocm.orientation = current_pose.pose.orientation;
+          ocm.absolute_x_axis_tolerance = goal->constraints.orientation_constraints[0].absolute_x_axis_tolerance;
+          ocm.absolute_y_axis_tolerance = goal->constraints.orientation_constraints[0].absolute_y_axis_tolerance;
+          ocm.absolute_z_axis_tolerance = goal->constraints.orientation_constraints[0].absolute_z_axis_tolerance;
+          ocm.weight = goal->constraints.orientation_constraints[0].weight;
+          pose_constraints.orientation_constraints.emplace_back(ocm);
+          move_group_->setPathConstraints(pose_constraints);
+        }
+      }
+
+      // Set target pose
       robot_state_->setJointGroupPositions(move_group_->getName(), target_joint_values);
       robot_state_->update();
       Eigen::Isometry3d end_effector_state = robot_state_->getGlobalLinkTransform(move_group_->getEndEffectorLink());
-
-      // Set pose constraint
-      // moveit_msgs::msg::Constraints pose_constraints;
-      // moveit_msgs::msg::OrientationConstraint ocm;
-
-      // ocm.link_name = "end_effector_link";  // Replace with your end effector link name
-      // ocm.header.frame_id = "base_link";    // Replace with your base link name
-      // ocm.orientation.w = 1.0;              // Specify the desired orientation
-      // ocm.absolute_x_axis_tolerance = 0.1;
-      // ocm.absolute_y_axis_tolerance = 0.1;
-      // ocm.absolute_z_axis_tolerance = 0.1;
-      // ocm.weight = 1.0;
-
-      // pose_constraints.orientation_constraints.push_back(ocm);
-
-      // move_group_->setPathConstraints(pose_constraints);
-
-      // Set target pose
       move_group_->setPoseTarget(end_effector_state);
       // move_group_->setJointValueTarget(target_joint_values);
 
@@ -241,7 +264,6 @@ void BackhoeChangePoseActionServer::execute(const std::shared_ptr<GoalHandleBack
         feedback->state = "ABORTED";
         goal_handle->publish_feedback(feedback);
         result->error_code.val = 9999;
-        goal_handle->abort(result);
 
         break;
       }
@@ -253,7 +275,6 @@ void BackhoeChangePoseActionServer::execute(const std::shared_ptr<GoalHandleBack
     feedback->state = "ABORTED";
     goal_handle->publish_feedback(feedback);
     result->error_code.val = 9999;
-    goal_handle->abort(result);
   }
 
   // If execution was successful, set the result of the action and mark it as succeeded.
