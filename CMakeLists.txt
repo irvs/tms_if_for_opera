@@ -14,6 +14,7 @@ set(TARGETS
   # backhoe_trajectory_execution_action_server
   backhoe_change_pose_action_server
   backhoe_excavate_simple_action_server
+  backhoe_change_pose_action_client
 )
 
 find_package(ament_cmake REQUIRED)
@@ -38,6 +39,8 @@ set(COMMON_DEPENDENCIES
   "moveit_ros_planning_interface"
   "rosidl_default_runtime"
   # "shape_msgs"
+  "tf2"
+  "tf2_geometry_msgs"
   
   "Boost"
   "mongocxx"
