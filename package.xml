@@ -9,7 +9,7 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>tms_msg_ts</depend>
+  <depend>tms_msg_rp</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_action</depend>
 

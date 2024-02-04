@@ -7,21 +7,21 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
-#include "tms_msg_ts/action/tms_ts_backhoe_change_pose.hpp"
+#include "tms_msg_rp/action/tms_rp_zx200_change_pose.hpp"
 
-class BackhoeChangePoseActionClient : public rclcpp::Node
+class Zx200ChangePoseActionClient : public rclcpp::Node
 {
 public:
-  using BackhoeChangePose = tms_msg_ts::action::TmsTsBackhoeChangePose;
-  using GoalHandleBackhoeChangePose = rclcpp_action::ClientGoalHandle<BackhoeChangePose>;
+  using Zx200ChangePose = tms_msg_rp::action::TmsRpZx200ChangePose;
+  using GoalHandleZx200ChangePose = rclcpp_action::ClientGoalHandle<Zx200ChangePose>;
 
-  explicit BackhoeChangePoseActionClient(const rclcpp::NodeOptions& options = rclcpp::NodeOptions())
-    : Node("backhoe_change_pose_action_client", options)
+  explicit Zx200ChangePoseActionClient(const rclcpp::NodeOptions& options = rclcpp::NodeOptions())
+    : Node("zx200_change_pose_action_client", options)
   {
-    this->client_ptr_ = rclcpp_action::create_client<BackhoeChangePose>(this, "backhoe_change_pose");
+    this->client_ptr_ = rclcpp_action::create_client<Zx200ChangePose>(this, "tms_rp_zx200_change_pose");
 
     this->timer_ = this->create_wall_timer(std::chrono::milliseconds(500),
-                                           std::bind(&BackhoeChangePoseActionClient::send_goal, this));
+                                           std::bind(&Zx200ChangePoseActionClient::send_goal, this));
   }
 
   void send_goal()
@@ -38,7 +38,7 @@ public:
 
     RCLCPP_INFO(this->get_logger(), "Action server is available");
 
-    auto goal_msg = BackhoeChangePose::Goal();
+    auto goal_msg = Zx200ChangePose::Goal();
     goal_msg.position_with_angle_sequence.resize(1);
     // Confirm to move
     // goal_msg.position_with_angle_sequence[0].position.x = 6.5003;
@@ -66,9 +66,9 @@ public:
     goal_msg.position_with_angle_sequence[0].theta_w = 180.0 * M_PI / 180.0;
 
     // moveit_msgs::msg::Constraints pose_constraints;
-    moveit_msgs::msg::OrientationConstraint ocm;
-    ocm.link_name = "bucket_end_link";  // Replace with your end effector link name
-    ocm.header.frame_id = "base_link";  // Replace with your base link name
+    // moveit_msgs::msg::OrientationConstraint ocm;
+    // ocm.link_name = "bucket_end_link";  // Replace with your end effector link name
+    // ocm.header.frame_id = "base_link";  // Replace with your base link name
     // Specify the desired orientation
     // Eigen::Quaterniond eigen_quaternion(current_end_effector_state.rotation());
     // geometry_msgs::msg::Quaternion geometry_quaternion;
@@ -77,20 +77,20 @@ public:
     // geometry_quaternion.z = eigen_quaternion.z();
     // geometry_quaternion.w = eigen_quaternion.w();
     // ocm.orientation = geometry_quaternion;
-    ocm.absolute_x_axis_tolerance = 2.0;   // fail at 0.423599
-    ocm.absolute_y_axis_tolerance = 2.0;   // fail at 0.023599
-    ocm.absolute_z_axis_tolerance = M_PI;  // fail at 0.423599
-    ocm.weight = 1.0;
-    goal_msg.constraints.orientation_constraints.push_back(ocm);
+    // ocm.absolute_x_axis_tolerance = 2.0;   // fail at 0.423599
+    // ocm.absolute_y_axis_tolerance = 2.0;   // fail at 0.023599
+    // ocm.absolute_z_axis_tolerance = M_PI;  // fail at 0.423599
+    // ocm.weight = 1.0;
+    // goal_msg.constraints.orientation_constraints.push_back(ocm);
 
     RCLCPP_INFO(this->get_logger(), "Sending goal");
 
-    auto send_goal_options = rclcpp_action::Client<BackhoeChangePose>::SendGoalOptions();
+    auto send_goal_options = rclcpp_action::Client<Zx200ChangePose>::SendGoalOptions();
 
     send_goal_options.goal_response_callback =
-        std::bind(&BackhoeChangePoseActionClient::goal_response_callback, this, _1);
-    send_goal_options.feedback_callback = std::bind(&BackhoeChangePoseActionClient::feedback_callback, this, _1, _2);
-    send_goal_options.result_callback = std::bind(&BackhoeChangePoseActionClient::result_callback, this, _1);
+        std::bind(&Zx200ChangePoseActionClient::goal_response_callback, this, _1);
+    send_goal_options.feedback_callback = std::bind(&Zx200ChangePoseActionClient::feedback_callback, this, _1, _2);
+    send_goal_options.result_callback = std::bind(&Zx200ChangePoseActionClient::result_callback, this, _1);
 
     this->client_ptr_->async_send_goal(goal_msg, send_goal_options);
 
@@ -107,13 +107,13 @@ public:
   }
 
 private:
-  rclcpp_action::Client<BackhoeChangePose>::SharedPtr client_ptr_;
+  rclcpp_action::Client<Zx200ChangePose>::SharedPtr client_ptr_;
   rclcpp::TimerBase::SharedPtr timer_;
   double tolerance_ = M_PI / 6.0;
   int pose_num = 0;
   int count_ = 0;
 
-  void goal_response_callback(const GoalHandleBackhoeChangePose::SharedPtr& goal_handle)
+  void goal_response_callback(const GoalHandleZx200ChangePose::SharedPtr& goal_handle)
   {
     if (!goal_handle)
     {
@@ -125,8 +125,8 @@ private:
     }
   }
 
-  void feedback_callback(const GoalHandleBackhoeChangePose::SharedPtr,
-                         const std::shared_ptr<const GoalHandleBackhoeChangePose::Feedback> feedback)
+  void feedback_callback(const GoalHandleZx200ChangePose::SharedPtr,
+                         const std::shared_ptr<const GoalHandleZx200ChangePose::Feedback> feedback)
   {
     std::stringstream ss;
     ss << "Feedback received: ";
@@ -136,7 +136,7 @@ private:
     RCLCPP_INFO(this->get_logger(), ss.str().c_str());
   }
 
-  void result_callback(const GoalHandleBackhoeChangePose::WrappedResult& result)
+  void result_callback(const GoalHandleZx200ChangePose::WrappedResult& result)
   {
     switch (result.code)
     {
@@ -177,7 +177,7 @@ private:
 int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
-  auto action_client = std::make_shared<BackhoeChangePoseActionClient>();
+  auto action_client = std::make_shared<Zx200ChangePoseActionClient>();
   rclcpp::spin(action_client);
   rclcpp::shutdown();
   return 0;

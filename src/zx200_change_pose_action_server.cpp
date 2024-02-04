@@ -1,14 +1,14 @@
-#include "tms_if_for_opera/backhoe_change_pose_action_server.hpp"
+#include "tms_if_for_opera/zx200_change_pose_action_server.hpp"
 
-#include <moveit_msgs/msg/constraints.hpp>
-#include <moveit_msgs/msg/orientation_constraint.hpp>
+// #include <moveit_msgs/msg/constraints.hpp>
+// #include <moveit_msgs/msg/orientation_constraint.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 using namespace tms_if_for_opera;
 
-BackhoeChangePoseActionServer::BackhoeChangePoseActionServer(const rclcpp::NodeOptions& options)
-  : Node("backhoe_change_pose_action_server", options)
+Zx200ChangePoseActionServer::Zx200ChangePoseActionServer(const rclcpp::NodeOptions& options)
+  : Node("tms_if_for_opera_zx200_change_pose", options)
 {
   this->declare_parameter<std::string>("robot_description", "");
   this->get_parameter("robot_description", robot_description_);
@@ -27,10 +27,10 @@ BackhoeChangePoseActionServer::BackhoeChangePoseActionServer(const rclcpp::NodeO
   RCLCPP_INFO(this->get_logger(), "Create server.");  // debug
   using namespace std::placeholders;
 
-  action_server_ = rclcpp_action::create_server<BackhoeChangePose>(
-      this, "backhoe_change_pose", std::bind(&BackhoeChangePoseActionServer::handle_goal, this, _1, _2),
-      std::bind(&BackhoeChangePoseActionServer::handle_cancel, this, _1),
-      std::bind(&BackhoeChangePoseActionServer::handle_accepted, this, _1));
+  action_server_ = rclcpp_action::create_server<Zx200ChangePose>(
+      this, "tms_rp_zx200_change_pose", std::bind(&Zx200ChangePoseActionServer::handle_goal, this, _1, _2),
+      std::bind(&Zx200ChangePoseActionServer::handle_cancel, this, _1),
+      std::bind(&Zx200ChangePoseActionServer::handle_accepted, this, _1));
   /****/
 
   /* Setup movegroup interface */
@@ -74,8 +74,8 @@ BackhoeChangePoseActionServer::BackhoeChangePoseActionServer(const rclcpp::NodeO
   /******/
 }
 
-rclcpp_action::GoalResponse BackhoeChangePoseActionServer::handle_goal(
-    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const BackhoeChangePose::Goal> goal)
+rclcpp_action::GoalResponse Zx200ChangePoseActionServer::handle_goal(const rclcpp_action::GoalUUID& uuid,
+                                                                     std::shared_ptr<const Zx200ChangePose::Goal> goal)
 {
   RCLCPP_INFO(this->get_logger(), "Received goal request");
   (void)uuid;
@@ -83,35 +83,35 @@ rclcpp_action::GoalResponse BackhoeChangePoseActionServer::handle_goal(
 }
 
 rclcpp_action::CancelResponse
-BackhoeChangePoseActionServer::handle_cancel(const std::shared_ptr<GoalHandleBackhoeChangePose> goal_handle)
+Zx200ChangePoseActionServer::handle_cancel(const std::shared_ptr<GoalHandleZx200ChangePose> goal_handle)
 {
   RCLCPP_INFO(this->get_logger(), "Received request to cancel goal");
   (void)goal_handle;
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-void BackhoeChangePoseActionServer::handle_accepted(const std::shared_ptr<GoalHandleBackhoeChangePose> goal_handle)
+void Zx200ChangePoseActionServer::handle_accepted(const std::shared_ptr<GoalHandleZx200ChangePose> goal_handle)
 {
   RCLCPP_INFO(this->get_logger(), "handle_accepted() start.");
   using namespace std::placeholders;
   // this needs to return quickly to avoid blocking the executor, so spin up a new thread
-  std::thread{ std::bind(&BackhoeChangePoseActionServer::execute, this, _1), goal_handle }.detach();
+  std::thread{ std::bind(&Zx200ChangePoseActionServer::execute, this, _1), goal_handle }.detach();
 }
 
-void BackhoeChangePoseActionServer::execute(const std::shared_ptr<GoalHandleBackhoeChangePose> goal_handle)
+void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200ChangePose> goal_handle)
 {
   // Apply collision object
   apply_collision_objects_from_db(collision_object_component_name_);
 
   // Clear constraints
-  move_group_->clearPathConstraints();
+  // move_group_->clearPathConstraints();
 
   // Execute goal
   RCLCPP_INFO(this->get_logger(), "Executing goal");
 
   const auto goal = goal_handle->get_goal();
-  auto feedback = std::make_shared<BackhoeChangePose::Feedback>();
-  auto result = std::make_shared<BackhoeChangePose::Result>();
+  auto feedback = std::make_shared<Zx200ChangePose::Feedback>();
+  auto result = std::make_shared<Zx200ChangePose::Result>();
 
   feedback->state = "IDLE";
   goal_handle->publish_feedback(feedback);
@@ -131,7 +131,6 @@ void BackhoeChangePoseActionServer::execute(const std::shared_ptr<GoalHandleBack
   {
     for (const auto& point : goal->trajectory.points)
     {
-      // TODO: Fix to use constraint
       std::map<std::string, double> target_joint_values;
       for (size_t i = 0; i < goal->trajectory.joint_names.size() && i < point.positions.size(); ++i)
       {
@@ -209,45 +208,46 @@ void BackhoeChangePoseActionServer::execute(const std::shared_ptr<GoalHandleBack
         break;
       }
 
-      // Set pose constraint
-      // Check if constraint exists
-      if (goal->constraints.joint_constraints.empty() && goal->constraints.position_constraints.empty() &&
-          goal->constraints.orientation_constraints.empty() && goal->constraints.visibility_constraints.empty())
-      {
-        RCLCPP_INFO(this->get_logger(), "Constraints do not exist");
-      }
-      else
-      {
-        RCLCPP_INFO(this->get_logger(), "Constraints exist");
+      // // Set pose constraint
+      // // Check if constraint exists
+      // if (goal->constraints.joint_constraints.empty() && goal->constraints.position_constraints.empty() &&
+      //     goal->constraints.orientation_constraints.empty() && goal->constraints.visibility_constraints.empty())
+      // {
+      //   RCLCPP_INFO(this->get_logger(), "Constraints do not exist");
+      // }
+      // else
+      // {
+      //   RCLCPP_INFO(this->get_logger(), "Constraints exist");
 
-        // TODO: Add error handling
-        //       - Use constraint in joint space
-        //       - Constraint is not for end effector
-        if (goal->constraints.orientation_constraints.size() > 0)
-        {
-          RCLCPP_INFO(this->get_logger(), "Orientation constraint exists");
-          auto current_pose = move_group_->getCurrentPose();
-          moveit_msgs::msg::Constraints pose_constraints;
-          moveit_msgs::msg::OrientationConstraint ocm;
-          ocm.header.frame_id = move_group_->getPoseReferenceFrame();  // Replace with your base link name
-          ocm.link_name = move_group_->getEndEffectorLink();
-          // Specify the desired orientation
-          ocm.orientation = current_pose.pose.orientation;
-          ocm.absolute_x_axis_tolerance = goal->constraints.orientation_constraints[0].absolute_x_axis_tolerance;
-          ocm.absolute_y_axis_tolerance = goal->constraints.orientation_constraints[0].absolute_y_axis_tolerance;
-          ocm.absolute_z_axis_tolerance = goal->constraints.orientation_constraints[0].absolute_z_axis_tolerance;
-          ocm.weight = goal->constraints.orientation_constraints[0].weight;
-          pose_constraints.orientation_constraints.emplace_back(ocm);
-          move_group_->setPathConstraints(pose_constraints);
-        }
-      }
+      //   // TODO: Add error handling
+      //   //       - Use constraint in joint space
+      //   //       - Constraint is not for end effector
+      //   if (goal->constraints.orientation_constraints.size() > 0)
+      //   {
+      //     RCLCPP_INFO(this->get_logger(), "Orientation constraint exists");
+      //     auto current_pose = move_group_->getCurrentPose();
+      //     moveit_msgs::msg::Constraints pose_constraints;
+      //     moveit_msgs::msg::OrientationConstraint ocm;
+      //     ocm.header.frame_id = move_group_->getPoseReferenceFrame();  // Replace with your base link name
+      //     ocm.link_name = move_group_->getEndEffectorLink();
+      //     // Specify the desired orientation
+      //     ocm.orientation = current_pose.pose.orientation;
+      //     ocm.absolute_x_axis_tolerance = goal->constraints.orientation_constraints[0].absolute_x_axis_tolerance;
+      //     ocm.absolute_y_axis_tolerance = goal->constraints.orientation_constraints[0].absolute_y_axis_tolerance;
+      //     ocm.absolute_z_axis_tolerance = goal->constraints.orientation_constraints[0].absolute_z_axis_tolerance;
+      //     ocm.weight = goal->constraints.orientation_constraints[0].weight;
+      //     pose_constraints.orientation_constraints.emplace_back(ocm);
+      //     move_group_->setPathConstraints(pose_constraints);
+      //   }
+      // }
 
       // Set target pose
-      robot_state_->setJointGroupPositions(move_group_->getName(), target_joint_values);
-      robot_state_->update();
-      Eigen::Isometry3d end_effector_state = robot_state_->getGlobalLinkTransform(move_group_->getEndEffectorLink());
-      move_group_->setPoseTarget(end_effector_state);
-      // move_group_->setJointValueTarget(target_joint_values);
+      // robot_state_->setJointGroupPositions(move_group_->getName(), target_joint_values);
+      // robot_state_->update();
+      // Eigen::Isometry3d end_effector_state = robot_state_->getGlobalLinkTransform(move_group_->getEndEffectorLink());
+      // move_group_->setPoseTarget(end_effector_state);
+
+      move_group_->setJointValueTarget(target_joint_values);
 
       feedback->state = "PLANNING";
       goal_handle->publish_feedback(feedback);
@@ -290,7 +290,7 @@ void BackhoeChangePoseActionServer::execute(const std::shared_ptr<GoalHandleBack
   }
 }
 
-void BackhoeChangePoseActionServer::apply_collision_objects_from_db(const std::string& component_name)
+void Zx200ChangePoseActionServer::apply_collision_objects_from_db(const std::string& component_name)
 {
   // Load collision objects from DB
   // RCLCPP_INFO(this->get_logger(), "Loading collision objects from DB");
@@ -369,7 +369,7 @@ void BackhoeChangePoseActionServer::apply_collision_objects_from_db(const std::s
   }
 }
 
-double BackhoeChangePoseActionServer::getDoubleValue(const bsoncxx::document::element& element)
+double Zx200ChangePoseActionServer::getDoubleValue(const bsoncxx::document::element& element)
 {
   if (element.type() == bsoncxx::type::k_double)
   {
@@ -388,7 +388,7 @@ double BackhoeChangePoseActionServer::getDoubleValue(const bsoncxx::document::el
 int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<BackhoeChangePoseActionServer>());
+  rclcpp::spin(std::make_shared<Zx200ChangePoseActionServer>());
   rclcpp::shutdown();
   return 0;
 }
