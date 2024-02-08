@@ -1,5 +1,5 @@
-#ifndef zx200_CHANGE_POSE_ACTION_SERVER_HPP_
-#define zx200_CHANGE_POSE_ACTION_SERVER_HPP_
+#ifndef ZX200_CHANGE_POSE_ACTION_SERVER_HPP_
+#define ZX200_CHANGE_POSE_ACTION_SERVER_HPP_
 
 #include <functional>
 #include <memory>
@@ -72,4 +72,4 @@ private:
 };
 }  // namespace tms_if_for_opera
 
-#endif  // zx200_CHANGE_POSE_ACTION_SERVER_HPP_
+#endif  // ZX200_CHANGE_POSE_ACTION_SERVER_HPP_
