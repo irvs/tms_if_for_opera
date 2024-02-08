@@ -40,6 +40,14 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_component_name': LaunchConfiguration('collision_object_component_name')}
         ])
+    zx200_excavate_simple_action_server_node = Node(
+        package='tms_if_for_opera',
+        executable='zx200_excavate_simple_action_server',
+        parameters=[
+            {'robot_description': robot_description_content},
+            {'planning_group': LaunchConfiguration('planning_group')},
+            {'collision_object_component_name': LaunchConfiguration('collision_object_component_name')}
+        ])
     
     # backhoe_excavate_simple_action_server_node = Node(
     #     package='tms_if_for_opera',
@@ -57,6 +65,7 @@ def generate_launch_description():
         declare_collision_object_component_name_arg,
         
         zx200_change_pose_action_server_node,
+        zx200_excavate_simple_action_server_node,
         # backhoe_excavate_simple_action_server_node
     ])
 
