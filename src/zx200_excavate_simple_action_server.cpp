@@ -60,18 +60,8 @@ Zx200ExcavateSimpleActionServer::Zx200ExcavateSimpleActionServer(const rclcpp::N
   // Init DB connection
   mongocxx::instance instance{};
 
-  /*** debug ***/
-
-  // RCLCPP_INFO(this->get_logger(), "Planning frame: %s", move_group_->getPlanningFrame().c_str());
-  // RCLCPP_INFO(this->get_logger(), "End effector link: %s", move_group_->getEndEffectorLink().c_str());
-  // RCLCPP_INFO(this->get_logger(), "Available Planning Groups:");
-  // std::copy(move_group_->getJointModelGroupNames().begin(), move_group_->getJointModelGroupNames().end(),
-  //           std::ostream_iterator<std::string>(std::cout, ", "));
-  // RCLCPP_INFO(this->get_logger(), "Joint Names:");
-  // std::copy(move_group_->getJointNames().begin(), move_group_->getJointNames().end(),
-  //           std::ostream_iterator<std::string>(std::cout, ", "));
-
-  /******/
+  // For emg stop
+  this->emg_stop_publisher_ = this->create_publisher<std_msgs::msg::Bool>("/zx200/emg_stop", 10);
 }
 
 rclcpp_action::GoalResponse Zx200ExcavateSimpleActionServer::handle_goal(
@@ -85,8 +75,18 @@ rclcpp_action::GoalResponse Zx200ExcavateSimpleActionServer::handle_goal(
 rclcpp_action::CancelResponse
 Zx200ExcavateSimpleActionServer::handle_cancel(const std::shared_ptr<GoalHandleZx200ExcavateSimple> goal_handle)
 {
-  RCLCPP_INFO(this->get_logger(), "Received request to cancel goal");
-  (void)goal_handle;
+  RCLCPP_INFO(this->get_logger(), "Publishing EMG stop signal to ZX200.");
+
+  // 実機用非常停止
+  std_msgs::msg::Bool msg;
+  msg.data = true;
+  this->emg_stop_publisher_->publish(msg);
+  // move_group停止
+  move_group_->stop();
+
+  // auto result = std::make_shared<Zx200ExcavateSimple::Result>();
+  // result->error_code.val = 9999;
+  // goal_handle->abort(result);
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 

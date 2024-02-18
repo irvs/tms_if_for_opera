@@ -22,7 +22,7 @@ find_package(ament_cmake REQUIRED)
 find_package(tms_msg_rp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
-# find_package(shape_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 
 find_package(moveit_common REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
@@ -39,7 +39,7 @@ set(COMMON_DEPENDENCIES
   "moveit_common"
   "moveit_ros_planning_interface"
   "rosidl_default_runtime"
-  # "shape_msgs"
+  "std_msgs"
   "tf2"
   "tf2_geometry_msgs"
   

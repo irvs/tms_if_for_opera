@@ -7,6 +7,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
+#include "std_msgs/msg/bool.hpp"
 // #include "shape_msgs/msg/solid_primitive.hpp"
 // #include "rclcpp_components/register_node_macro.hpp"
 
@@ -60,6 +61,8 @@ private:
   // std::map<std::string, double> target_joint_values_;
   ExcavatorIK excavator_ik_;
   moveit::core::RobotStatePtr robot_state_;
+
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr emg_stop_publisher_;  // for emg stop
 
   rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID& uuid,
                                           std::shared_ptr<const Zx200ChangePose::Goal> goal);
