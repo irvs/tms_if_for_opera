@@ -13,7 +13,7 @@ Zx200ExcavateSimpleActionServer::Zx200ExcavateSimpleActionServer(const rclcpp::N
   this->declare_parameter<std::string>("robot_description", "");
   this->get_parameter("robot_description", robot_description_);
   RCLCPP_INFO(this->get_logger(), "Robot description: %s", robot_description_.c_str());
-  // excavator_ik_.loadURDF(robot_description_);
+  excavator_ik_.loadURDF(robot_description_);
 
   this->declare_parameter<std::string>("planning_group", "");
   this->get_parameter("planning_group", planning_group_);
@@ -100,34 +100,43 @@ void Zx200ExcavateSimpleActionServer::handle_accepted(const std::shared_ptr<Goal
 
 void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx200ExcavateSimple> goal_handle)
 {
+  // Start to execute goal
+  RCLCPP_INFO(this->get_logger(), "Executing goal");
+  const auto goal = goal_handle->get_goal();
+  auto feedback = std::make_shared<Zx200ExcavateSimple::Feedback>();
+  auto result = std::make_shared<Zx200ExcavateSimple::Result>();
+
+  // Function for error handling
+  auto handle_error = [&](const std::string& message) {
+    if (goal_handle->is_active())
+    {
+      result->error_code.val = 9999;
+      goal_handle->abort(result);
+      RCLCPP_INFO(this->get_logger(), message.c_str());
+    }
+    else
+    {
+      RCLCPP_INFO(this->get_logger(), "Goal is not active");
+    }
+  };
+
   // Apply collision object
   apply_collision_objects_from_db(collision_object_component_name_);
 
   // Clear constraints
   // move_group_->clearPathConstraints();
 
-  // Execute goal
-  RCLCPP_INFO(this->get_logger(), "Executing goal");
-
-  const auto goal = goal_handle->get_goal();
-  auto feedback = std::make_shared<Zx200ExcavateSimple::Feedback>();
-  auto result = std::make_shared<Zx200ExcavateSimple::Result>();
-
-  feedback->state = "IDLE";
-  goal_handle->publish_feedback(feedback);
-
-  // Get current joint values
-  std::vector<double> joint_values = move_group_->getCurrentJointValues();
-  for (size_t i = 0; i < joint_names_.size() && i < joint_values.size(); i++)
+  /*** Move to a position 1 m higher than the target excavation position ***/
+  // Get target joint values
+  std::vector<double> target_joint_values(joint_names_.size(), 0.0);
+  if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x, goal->position_with_angle.position.y,
+                                          goal->position_with_angle.position.z + 2.0, goal->position_with_angle.theta_w,
+                                          target_joint_values) == -1)
   {
-    current_joint_values_[joint_names_[i]] = joint_values[i];
-    // target_joint_values_[joint_names_[i]] = joint_values[i];
+    handle_error("Failed to calculate inverse kinematics");
+    return;
   }
 
-  // Set target joint values
-  std::map<std::string, double> target_joint_values;
-  target_joint_values = current_joint_values_;
-  target_joint_values["bucket_joint"] = goal->target_angle;
   move_group_->setJointValueTarget(target_joint_values);
 
   // Plan
@@ -136,38 +145,85 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
   moveit::planning_interface::MoveGroupInterface::Plan my_plan;
   if (move_group_->plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
   {
-    feedback->state = "ABORTED";
-    goal_handle->publish_feedback(feedback);
-    result->error_code.val = 9999;
+    handle_error("Failed to plan");
+    return;
   }
 
   // Execute
   feedback->state = "EXECUTING";
   goal_handle->publish_feedback(feedback);
-  if (move_group_->execute(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  if (move_group_->execute(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
   {
-    feedback->state = "SUCCEEDED";
-    goal_handle->publish_feedback(feedback);
-    result->error_code.val = 1;
+    handle_error("Failed to execute");
+    return;
   }
-  else
+
+  /*** Move to a target excavation position ***/
+  // Get target joint values
+  if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x, goal->position_with_angle.position.y,
+                                          goal->position_with_angle.position.z, goal->position_with_angle.theta_w,
+                                          target_joint_values) == -1)
   {
-    feedback->state = "ABORTED";
-    goal_handle->publish_feedback(feedback);
-    result->error_code.val = 9999;
+    handle_error("Failed to calculate inverse kinematics");
+    return;
+  }
+
+  move_group_->setJointValueTarget(target_joint_values);
+
+  // Plan
+  feedback->state = "PLANNING";
+  goal_handle->publish_feedback(feedback);
+  if (move_group_->plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  {
+    handle_error("Failed to plan");
+    return;
+  }
+
+  // Execute
+  feedback->state = "EXECUTING";
+  goal_handle->publish_feedback(feedback);
+  if (move_group_->execute(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  {
+    handle_error("Failed to execute");
+    return;
+  }
+
+  /*** Exacvate ***/
+  // Get current joint values
+  target_joint_values = move_group_->getCurrentJointValues();
+  for (size_t i = 0; i < joint_names_.size(); i++)
+  {
+    if (joint_names_[i] == "bucket_joint")
+    {
+      target_joint_values[i] = 2.2;  // 掘削時のバケットの目標角度[rad]
+      break;
+    }
+  }
+
+  move_group_->setJointValueTarget(target_joint_values);
+
+  // Plan
+  feedback->state = "PLANNING";
+  goal_handle->publish_feedback(feedback);
+  if (move_group_->plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  {
+    handle_error("Failed to plan");
+    return;
+  }
+
+  // Execute
+  feedback->state = "EXECUTING";
+  goal_handle->publish_feedback(feedback);
+  if (move_group_->execute(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  {
+    handle_error("Failed to execute");
+    return;
   }
 
   // If execution was successful, set the result of the action and mark it as succeeded.
-  if (result->error_code.val == 1)
-  {
-    RCLCPP_INFO(this->get_logger(), "Goal succeeded");
-    goal_handle->succeed(result);
-  }
-  else
-  {
-    RCLCPP_INFO(this->get_logger(), "Goal aborted");
-    goal_handle->abort(result);
-  }
+  RCLCPP_INFO(this->get_logger(), "Goal succeeded");
+  result->error_code.val = 1;
+  goal_handle->succeed(result);
 }
 
 void Zx200ExcavateSimpleActionServer::apply_collision_objects_from_db(const std::string& component_name)

@@ -33,7 +33,7 @@
 #include <mongocxx/client.hpp>
 #include <mongocxx/instance.hpp>
 
-// #include "excavator_ik/excavator_ik.hpp"
+#include "excavator_ik/excavator_ik.hpp"
 
 namespace tms_if_for_opera
 {
@@ -59,7 +59,7 @@ private:
   std::vector<std::string> joint_names_;
   std::map<std::string, double> current_joint_values_;
   // std::map<std::string, double> target_joint_values_;
-  // ExcavatorIK excavator_ik_;
+  ExcavatorIK excavator_ik_;
   moveit::core::RobotStatePtr robot_state_;
 
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr emg_stop_publisher_;  // for emg stop
