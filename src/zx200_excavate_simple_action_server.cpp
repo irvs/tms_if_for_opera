@@ -129,12 +129,19 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
   /*** Move to a position 1 m higher than the target excavation position ***/
   // Get target joint values
   std::vector<double> target_joint_values(joint_names_.size(), 0.0);
-  if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x, goal->position_with_angle.position.y,
-                                          goal->position_with_angle.position.z + 2.0, goal->position_with_angle.theta_w,
-                                          target_joint_values) == -1)
+  for (double i = 0.0; i < M_PI / 3.0; i += 0.01)
   {
-    handle_error("Failed to calculate inverse kinematics");
-    return;
+    if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x, goal->position_with_angle.position.y,
+                                            goal->position_with_angle.position.z + 2.0, i, target_joint_values) == 0)
+    {
+      break;
+    }
+
+    if (i == excavator_ik_.model_.getJoint("bucket_joint")->limits->upper - 0.1)
+    {
+      handle_error("Failed to calculate inverse kinematics");
+      return;
+    }
   }
 
   move_group_->setJointValueTarget(target_joint_values);
@@ -159,13 +166,19 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
   }
 
   /*** Move to a target excavation position ***/
-  // Get target joint values
-  if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x, goal->position_with_angle.position.y,
-                                          goal->position_with_angle.position.z, goal->position_with_angle.theta_w,
-                                          target_joint_values) == -1)
+  for (double i = 0.0; i < M_PI / 3.0; i += 0.01)
   {
-    handle_error("Failed to calculate inverse kinematics");
-    return;
+    if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x, goal->position_with_angle.position.y,
+                                            goal->position_with_angle.position.z, i, target_joint_values) == 0)
+    {
+      break;
+    }
+
+    if (i == excavator_ik_.model_.getJoint("bucket_joint")->limits->upper - 0.1)
+    {
+      handle_error("Failed to calculate inverse kinematics");
+      return;
+    }
   }
 
   move_group_->setJointValueTarget(target_joint_values);
