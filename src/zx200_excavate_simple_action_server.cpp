@@ -196,7 +196,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
   {
     if (joint_names_[i] == "bucket_joint")
     {
-      target_joint_values[i] = 2.2;  // 掘削時のバケットの目標角度[rad]
+      target_joint_values[i] = 1.92;  // 掘削時のバケットの目標角度[rad]
       break;
     }
   }
