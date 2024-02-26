@@ -136,12 +136,6 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
     {
       break;
     }
-
-    if (i == excavator_ik_.model_.getJoint("bucket_joint")->limits->upper - 0.1)
-    {
-      handle_error("Failed to calculate inverse kinematics");
-      return;
-    }
   }
 
   move_group_->setJointValueTarget(target_joint_values);
@@ -172,12 +166,6 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
                                             goal->position_with_angle.position.z, i, target_joint_values) == 0)
     {
       break;
-    }
-
-    if (i == excavator_ik_.model_.getJoint("bucket_joint")->limits->upper - 0.1)
-    {
-      handle_error("Failed to calculate inverse kinematics");
-      return;
     }
   }
 
