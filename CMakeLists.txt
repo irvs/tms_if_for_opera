@@ -11,16 +11,17 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 set(TARGETS
-  # backhoe_trajectory_execution_action_server
-  backhoe_change_pose_action_server
-  backhoe_excavate_simple_action_server
+  zx200_change_pose_action_server
+  zx200_excavate_simple_action_server
+  zx200_release_simple_action_server
+  zx200_change_pose_action_client
 )
 
 find_package(ament_cmake REQUIRED)
-find_package(tms_msg_ts REQUIRED)
+find_package(tms_msg_rp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
-# find_package(shape_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 
 find_package(moveit_common REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
@@ -37,14 +38,16 @@ set(COMMON_DEPENDENCIES
   "moveit_common"
   "moveit_ros_planning_interface"
   "rosidl_default_runtime"
-  # "shape_msgs"
+  "std_msgs"
+  "tf2"
+  "tf2_geometry_msgs"
   
   "Boost"
   "mongocxx"
   "bsoncxx"
 
   "excavator_ik"
-  "tms_msg_ts"
+  "tms_msg_rp"
 )
 
 set(COMMON_INCLUDE_DIRS
@@ -78,11 +81,11 @@ install(DIRECTORY
 
 # if(BUILD_TESTING)
 #   find_package(ament_cmake_gtest REQUIRED)
-#   ament_add_gtest(test_backhoe_change_pose_action_server test/test_backhoe_change_pose_action_server.cpp)
-#   ament_target_dependencies(test_backhoe_change_pose_action_server ${COMMON_DEPENDENCIES})
-#   target_include_directories(test_backhoe_change_pose_action_server PRIVATE ${COMMON_INCLUDE_DIRS})
-#   target_link_directories(test_backhoe_change_pose_action_server PUBLIC ${COMMON_LINK_DIRS})
-#   target_link_libraries(test_backhoe_change_pose_action_server ${COMMON_LINK_LIBS})
+#   ament_add_gtest(test_zx200_change_pose_action_server test/test_zx200_change_pose_action_server.cpp)
+#   ament_target_dependencies(test_zx200_change_pose_action_server ${COMMON_DEPENDENCIES})
+#   target_include_directories(test_zx200_change_pose_action_server PRIVATE ${COMMON_INCLUDE_DIRS})
+#   target_link_directories(test_zx200_change_pose_action_server PUBLIC ${COMMON_LINK_DIRS})
+#   target_link_libraries(test_zx200_change_pose_action_server ${COMMON_LINK_LIBS})
 # endif()
 
 ament_package()

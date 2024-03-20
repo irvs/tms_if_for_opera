@@ -1,14 +1,19 @@
-#include "tms_if_for_opera/backhoe_excavate_simple_action_server.hpp"
+#include "tms_if_for_opera/zx200_release_simple_action_server.hpp"
+
+// #include <moveit_msgs/msg/constraints.hpp>
+// #include <moveit_msgs/msg/orientation_constraint.hpp>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 using namespace tms_if_for_opera;
 
-BackhoeExcavateSimpleActionServer::BackhoeExcavateSimpleActionServer(const rclcpp::NodeOptions& options)
-  : Node("backhoe_excavate_simple_action_server", options)
+Zx200ReleaseSimpleActionServer::Zx200ReleaseSimpleActionServer(const rclcpp::NodeOptions& options)
+  : Node("tms_if_for_opera_zx200_release_simple", options)
 {
   this->declare_parameter<std::string>("robot_description", "");
   this->get_parameter("robot_description", robot_description_);
   RCLCPP_INFO(this->get_logger(), "Robot description: %s", robot_description_.c_str());
-  excavator_ik_.loadURDF(robot_description_);
+  // excavator_ik_.loadURDF(robot_description_);
 
   this->declare_parameter<std::string>("planning_group", "");
   this->get_parameter("planning_group", planning_group_);
@@ -22,10 +27,10 @@ BackhoeExcavateSimpleActionServer::BackhoeExcavateSimpleActionServer(const rclcp
   RCLCPP_INFO(this->get_logger(), "Create server.");  // debug
   using namespace std::placeholders;
 
-  action_server_ = rclcpp_action::create_server<BackhoeExcavateSimple>(
-      this, "backhoe_excavate_simple", std::bind(&BackhoeExcavateSimpleActionServer::handle_goal, this, _1, _2),
-      std::bind(&BackhoeExcavateSimpleActionServer::handle_cancel, this, _1),
-      std::bind(&BackhoeExcavateSimpleActionServer::handle_accepted, this, _1));
+  action_server_ = rclcpp_action::create_server<Zx200ReleaseSimple>(
+      this, "tms_rp_zx200_release_simple", std::bind(&Zx200ReleaseSimpleActionServer::handle_goal, this, _1, _2),
+      std::bind(&Zx200ReleaseSimpleActionServer::handle_cancel, this, _1),
+      std::bind(&Zx200ReleaseSimpleActionServer::handle_accepted, this, _1));
   /****/
 
   /* Setup movegroup interface */
@@ -40,28 +45,27 @@ BackhoeExcavateSimpleActionServer::BackhoeExcavateSimpleActionServer(const rclcp
   move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, planning_group_);
   // moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
 
+  move_group_->setMaxVelocityScalingFactor(1.0);
+  move_group_->setMaxAccelerationScalingFactor(1.0);
+  move_group_->setNumPlanningAttempts(10);
+  move_group_->setPlanningTime(10.0);
+  move_group_->setPlannerId("RRTConnectkConfigDefault");
+
   // Get robot info
   joint_names_ = move_group_->getJointNames();
+
+  // For FK
+  robot_state_ = std::make_shared<moveit::core::RobotState>(move_group_->getRobotModel());
 
   // Init DB connection
   mongocxx::instance instance{};
 
-  /*** debug ***/
-
-  // RCLCPP_INFO(this->get_logger(), "Planning frame: %s", move_group_->getPlanningFrame().c_str());
-  // RCLCPP_INFO(this->get_logger(), "End effector link: %s", move_group_->getEndEffectorLink().c_str());
-  // RCLCPP_INFO(this->get_logger(), "Available Planning Groups:");
-  // std::copy(move_group_->getJointModelGroupNames().begin(), move_group_->getJointModelGroupNames().end(),
-  //           std::ostream_iterator<std::string>(std::cout, ", "));
-  // RCLCPP_INFO(this->get_logger(), "Joint Names:");
-  // std::copy(move_group_->getJointNames().begin(), move_group_->getJointNames().end(),
-  //           std::ostream_iterator<std::string>(std::cout, ", "));
-
-  /******/
+  // For emg stop
+  this->emg_stop_publisher_ = this->create_publisher<std_msgs::msg::Bool>("/zx200/emg_stop", 10);
 }
 
-rclcpp_action::GoalResponse BackhoeExcavateSimpleActionServer::handle_goal(
-    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const BackhoeExcavateSimple::Goal> goal)
+rclcpp_action::GoalResponse Zx200ReleaseSimpleActionServer::handle_goal(
+    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const Zx200ReleaseSimple::Goal> goal)
 {
   RCLCPP_INFO(this->get_logger(), "Received goal request");
   (void)uuid;
@@ -69,65 +73,87 @@ rclcpp_action::GoalResponse BackhoeExcavateSimpleActionServer::handle_goal(
 }
 
 rclcpp_action::CancelResponse
-BackhoeExcavateSimpleActionServer::handle_cancel(const std::shared_ptr<GoalHandleBackhoeExcavateSimple> goal_handle)
+Zx200ReleaseSimpleActionServer::handle_cancel(const std::shared_ptr<GoalHandleZx200ReleaseSimple> goal_handle)
 {
-  RCLCPP_INFO(this->get_logger(), "Received request to cancel goal");
-  (void)goal_handle;
-  return rclcpp_action::CancelResponse::ACCEPT;
+  RCLCPP_INFO(this->get_logger(), "Publishing EMG stop signal to ZX200.");
+
+  // 実機用非常停止
+  std_msgs::msg::Bool msg;
+  msg.data = true;
+  this->emg_stop_publisher_->publish(msg);
+  // move_group停止
+  move_group_->stop();
+
+  // auto result = std::make_shared<Zx200ReleaseSimple::Result>();
+  // result->error_code.val = 9999;
+  // goal_handle->abort(result);
 }
 
-void BackhoeExcavateSimpleActionServer::handle_accepted(
-    const std::shared_ptr<GoalHandleBackhoeExcavateSimple> goal_handle)
+void Zx200ReleaseSimpleActionServer::handle_accepted(const std::shared_ptr<GoalHandleZx200ReleaseSimple> goal_handle)
 {
   RCLCPP_INFO(this->get_logger(), "handle_accepted() start.");
   using namespace std::placeholders;
   // this needs to return quickly to avoid blocking the executor, so spin up a new thread
-  std::thread{ std::bind(&BackhoeExcavateSimpleActionServer::execute, this, _1), goal_handle }.detach();
+  std::thread{ std::bind(&Zx200ReleaseSimpleActionServer::execute, this, _1), goal_handle }.detach();
 }
 
-void BackhoeExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleBackhoeExcavateSimple> goal_handle)
+void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx200ReleaseSimple> goal_handle)
 {
   // Apply collision object
   apply_collision_objects_from_db(collision_object_component_name_);
+
+  // Clear constraints
+  // move_group_->clearPathConstraints();
 
   // Execute goal
   RCLCPP_INFO(this->get_logger(), "Executing goal");
 
   const auto goal = goal_handle->get_goal();
-  auto feedback = std::make_shared<BackhoeExcavateSimple::Feedback>();
-  auto result = std::make_shared<BackhoeExcavateSimple::Result>();
+  auto feedback = std::make_shared<Zx200ReleaseSimple::Feedback>();
+  auto result = std::make_shared<Zx200ReleaseSimple::Result>();
 
   feedback->state = "IDLE";
   goal_handle->publish_feedback(feedback);
 
   // Get current joint values
   std::vector<double> joint_values = move_group_->getCurrentJointValues();
-  std::map<std::string, double> target_joint_values;
   for (size_t i = 0; i < joint_names_.size() && i < joint_values.size(); i++)
   {
-    target_joint_values[joint_names_[i]] = joint_values[i];
+    current_joint_values_[joint_names_[i]] = joint_values[i];
+    // target_joint_values_[joint_names_[i]] = joint_values[i];
   }
-  target_joint_values["bucket_joint"] = goal->target_angle;
 
-  // Planning
+  // Set target joint values
+  std::map<std::string, double> target_joint_values;
+  target_joint_values = current_joint_values_;
+  target_joint_values["bucket_joint"] = goal->target_angle;
   move_group_->setJointValueTarget(target_joint_values);
 
+  // Plan
   feedback->state = "PLANNING";
   goal_handle->publish_feedback(feedback);
+  moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+  if (move_group_->plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  {
+    feedback->state = "ABORTED";
+    goal_handle->publish_feedback(feedback);
+    result->error_code.val = 9999;
+  }
 
-  if (move_group_->move() == moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  // Execute
+  feedback->state = "EXECUTING";
+  goal_handle->publish_feedback(feedback);
+  if (move_group_->execute(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS)
   {
     feedback->state = "SUCCEEDED";
     goal_handle->publish_feedback(feedback);
     result->error_code.val = 1;
-    // goal_handle->succeed(result);
   }
   else
-  {  // Failed
+  {
     feedback->state = "ABORTED";
     goal_handle->publish_feedback(feedback);
     result->error_code.val = 9999;
-    goal_handle->abort(result);
   }
 
   // If execution was successful, set the result of the action and mark it as succeeded.
@@ -143,7 +169,7 @@ void BackhoeExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandle
   }
 }
 
-void BackhoeExcavateSimpleActionServer::apply_collision_objects_from_db(const std::string& component_name)
+void Zx200ReleaseSimpleActionServer::apply_collision_objects_from_db(const std::string& component_name)
 {
   // Load collision objects from DB
   // RCLCPP_INFO(this->get_logger(), "Loading collision objects from DB");
@@ -156,9 +182,14 @@ void BackhoeExcavateSimpleActionServer::apply_collision_objects_from_db(const st
   auto filter = filter_builder.view();
   auto result = collection.find_one(filter);
 
-  if (!result)
+  if ((component_name != "") && !result)
   {
     RCLCPP_ERROR(this->get_logger(), "Failed to get collision objects from DB");
+    return;
+  }
+  else if (component_name == "")
+  {
+    RCLCPP_INFO(this->get_logger(), "No collision objects to load");
     return;
   }
   else
@@ -181,11 +212,6 @@ void BackhoeExcavateSimpleActionServer::apply_collision_objects_from_db(const st
     // Get collision object type
     shape_msgs::msg::SolidPrimitive primitive;
     primitive.type = co["primitive_type"].get_int32().value;
-    // RCLCPP_INFO(this->get_logger(), "primitive type: %d", primitive.type);
-    // for (auto dimension : co["dimensions"].get_array().value)
-    // {
-    //   primitive.dimensions.push_back(getDoubleValue(dimension));
-    // }
     for (auto dimension : co["dimensions"].get_array().value)
     {
       if (dimension.type() == bsoncxx::type::k_double)
@@ -200,9 +226,6 @@ void BackhoeExcavateSimpleActionServer::apply_collision_objects_from_db(const st
       {
         throw std::runtime_error("Unsupported type");
       }
-      // bsoncxx::document::element dimensionElement = *dimension.get_document().view().begin();
-      // primitive.dimensions.push_back(getDoubleValue(dimensionElement));
-      // primitive.dimensions.push_back(getDoubleValue(dimension));
     }
 
     co_msg.primitives.push_back(primitive);
@@ -225,7 +248,7 @@ void BackhoeExcavateSimpleActionServer::apply_collision_objects_from_db(const st
   }
 }
 
-double BackhoeExcavateSimpleActionServer::getDoubleValue(const bsoncxx::document::element& element)
+double Zx200ReleaseSimpleActionServer::getDoubleValue(const bsoncxx::document::element& element)
 {
   if (element.type() == bsoncxx::type::k_double)
   {
@@ -244,7 +267,7 @@ double BackhoeExcavateSimpleActionServer::getDoubleValue(const bsoncxx::document
 int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<BackhoeExcavateSimpleActionServer>());
+  rclcpp::spin(std::make_shared<Zx200ReleaseSimpleActionServer>());
   rclcpp::shutdown();
   return 0;
 }
