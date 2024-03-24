@@ -1,0 +1,30 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/common/ros2_tms_for_construction_ws/install/tms_ts_subtask/include/**",
+        "/home/common/ros2_tms_for_construction_ws/install/tms_msg_ur/include/**",
+        "/home/common/ros2_tms_for_construction_ws/install/tms_msg_ts/include/**",
+        "/home/common/ros2_tms_for_construction_ws/install/tms_msg_rp/include/**",
+        "/home/common/ros2_tms_for_construction_ws/install/tms_msg_db/include/**",
+        "/home/common/ros2_tms_for_construction_ws/install/sensing_msgs/include/**",
+        "/home/common/ros2_tms_for_construction_ws/install/excavator_ik/include/**",
+        "/opt/ros/humble/include/**",
+        "/home/common/ros2_tms_for_construction_ws/src/excavator_ik/include/**",
+        "/home/common/ros2_tms_for_construction_ws/src/ros2_tms_for_construction/tms_ts/tms_ts_subtask/include/**",
+        "/home/common/ros2_tms_for_construction_ws/src/tms_if_for_opera/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}
