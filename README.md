@@ -1,13 +1,13 @@
 # TMS-I/F-For-OPERA
 
 The tms_if_for_opera module serves as an interface that mediates the connection between the ROS2-TMS for Construction developed by us and the OPERA developed by PWRI. 
-The following figure is used overall architecture.
+The following figure is the overall architecture.
 
 
 ![](docs/tms_if_for_opera.png)
 
 
-As shown in the figure above, the tms_if_for_opera is an interface module used to connect ROS2-TMS for Construction and OPERA. It operates the OPERA-compatible construction machinery based on the operation instructions sent from the task management sysytem of ROS2-TMS for Construction.
+As shown in the figure above, the tms_if_for_opera is an interface module used to connect ROS2-TMS for Construction and OPERA. It operates the OPERA-compatible construction machinery based on the operation instructions sent from the task management system of ROS2-TMS for Construction.
 
 Currently, the tms_if_for_opera module is implemented only with the functionality to interface with the OPERA-compatible construction machine ZX200, and the operational overview is depicted in the figure above.
 The operation will be explained below.
@@ -24,16 +24,3 @@ The operation will be explained below.
 
 
 Thus, tms_if_for_opera is an indispensable module for operating OPERA-compatible construction machinery from the task management system of ROS2-TMS for Construction. In the future, we plan to add interface functionalities to the tms_if_for_opera module for OPERA-compatible construction machinery, including not only the backhoe ZX200 but also crawler dumps such as the IC120 and other OPERA-compatible construction machinery.
-
-``` terminal_1
-ros2 launch zx200_bringup vehicle.launch.py 
-```
-
-``` terminal_2
-ros2 launch tms_ts_launch tms_ts_construction.launch.py
-```
-
-``` terminal_3
-ros2 launch tms_if_for_opera tms_if_for_opera.launch.py 
-```
-ボタンぽち
