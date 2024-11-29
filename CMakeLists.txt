@@ -82,6 +82,7 @@ install(TARGETS excavator_ik
 
 install(DIRECTORY
   launch
+  collision_objects
   DESTINATION share/${PROJECT_NAME}/
 )
 

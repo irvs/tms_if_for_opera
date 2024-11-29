@@ -102,6 +102,7 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
 {
   // Apply collision object
   apply_collision_objects_from_db(collision_object_component_name_);
+  apply_collision_objects_ic120_from_db("collision_object_ic120");
 
   // Clear constraints
   // move_group_->clearPathConstraints();
@@ -319,8 +320,8 @@ void Zx200ChangePoseActionServer::apply_collision_objects_from_db(const std::str
   }
 
   // Remove all collision objects
-  std::vector<std::string> object_ids = planning_scene_interface_.getKnownObjectNames();
-  planning_scene_interface_.removeCollisionObjects(object_ids);
+  // std::vector<std::string> object_ids = planning_scene_interface_.getKnownObjectNames();
+  // planning_scene_interface_.removeCollisionObjects(object_ids);
 
   // Apply collision objects
   auto collision_objects = result->view()["collision_objects"].get_array().value;
@@ -367,6 +368,79 @@ void Zx200ChangePoseActionServer::apply_collision_objects_from_db(const std::str
 
     planning_scene_interface_.applyCollisionObject(co_msg);
   }
+}
+
+void Zx200ChangePoseActionServer::apply_collision_objects_ic120_from_db(const std::string& component_name)
+{
+  // Load collision objects from DB
+  // RCLCPP_INFO(this->get_logger(), "Loading collision objects from DB");
+
+  mongocxx::client client{ mongocxx::uri{ "mongodb://localhost:27017" } };
+  mongocxx::database db = client["rostmsdb"];
+  mongocxx::collection collection = db["parameter"];
+  bsoncxx::builder::stream::document filter_builder;
+  filter_builder << "component_name" << component_name;
+  auto filter = filter_builder.view();
+  auto result = collection.find_one(filter);
+
+  if ((component_name != "") && !result)
+  {
+    RCLCPP_ERROR(this->get_logger(), "Failed to get collision objects from DB");
+    return;
+  }
+  else if (component_name == "")
+  {
+    RCLCPP_INFO(this->get_logger(), "No collision objects to load");
+    return;
+  }
+  else
+  {
+    RCLCPP_INFO(this->get_logger(), "Succeeded to get collision objects from DB");
+  }
+
+  // Remove all collision objects
+  // std::vector<std::string> object_ids = planning_scene_interface_.getKnownObjectNames();
+  // planning_scene_interface_.removeCollisionObjects(object_ids);
+
+  auto collision_objects_ic120 = result->view();
+  moveit_msgs::msg::CollisionObject co_ic120_msg;
+  // RCLCPP_INFO(this->get_logger(), "Retrieved document: %s", bsoncxx::to_json(collision_objects_ic120).c_str());
+  co_ic120_msg.header.frame_id = move_group_->getPlanningFrame();
+  // co_ic120_msg.id = collision_objects_ic120["_id"].get_utf8().value.to_string();
+
+  // Apply collision objects
+  shapes::Mesh *m = shapes::createMeshFromResource("package://tms_if_for_opera/collision_objects/ic120/ic120.dae");
+  if (!m)
+  {
+      RCLCPP_ERROR(this->get_logger(), "Failed to load mesh file!");
+      return;
+  }
+  shape_msgs::msg::Mesh mesh_msg;
+  shapes::ShapeMsg shape_msg;
+  shapes::constructMsgFromShape(m, shape_msg);
+  mesh_msg = boost::get<shape_msgs::msg::Mesh>(shape_msg);
+
+  // Get collision object pose
+  geometry_msgs::msg::Pose mesh_pose;
+  mesh_pose.position.x = collision_objects_ic120["x"].get_double().value;
+  mesh_pose.position.y = collision_objects_ic120["y"].get_double().value;
+  mesh_pose.position.z = collision_objects_ic120["z"].get_double().value;
+  mesh_pose.orientation.x = collision_objects_ic120["qx"].get_double().value;
+  mesh_pose.orientation.y = collision_objects_ic120["qy"].get_double().value;
+  mesh_pose.orientation.z = collision_objects_ic120["qz"].get_double().value;
+  mesh_pose.orientation.w = collision_objects_ic120["qw"].get_double().value;
+
+  // CollisionObjectにメッシュを追加
+  co_ic120_msg.meshes.push_back(mesh_msg);
+  co_ic120_msg.mesh_poses.push_back(mesh_pose);
+  co_ic120_msg.operation = moveit_msgs::msg::CollisionObject::ADD;
+
+  // Planning Sceneにオブジェクトを追加
+  std::vector<moveit_msgs::msg::CollisionObject> collision_objects;
+  collision_objects.push_back(co_ic120_msg);
+
+  planning_scene_interface_.applyCollisionObject(co_ic120_msg);
+
 }
 
 double Zx200ChangePoseActionServer::getDoubleValue(const bsoncxx::document::element& element)

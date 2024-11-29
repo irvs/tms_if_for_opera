@@ -23,6 +23,8 @@
 
 #include <moveit_msgs/msg/attached_collision_object.hpp>
 #include <moveit_msgs/msg/collision_object.hpp>
+#include <geometric_shapes/shape_operations.h>
+#include <shape_msgs/msg/mesh.hpp>
 
 #include <moveit/macros/console_colors.h>
 #include <moveit/robot_state/robot_state.h>
@@ -71,6 +73,7 @@ private:
   void execute(const std::shared_ptr<GoalHandleZx200ReleaseSimple> goal_handle);
 
   void apply_collision_objects_from_db(const std::string& component_name);
+  void apply_collision_objects_ic120_from_db(const std::string& component_name);
   double getDoubleValue(const bsoncxx::document::element& element);
 };
 }  // namespace tms_if_for_opera
