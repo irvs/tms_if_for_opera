@@ -23,10 +23,10 @@ def generate_launch_description():
         default_value='manipulator',
         description='The planning group')
 
-    declare_collision_object_component_name_arg = DeclareLaunchArgument(
-        'collision_object_component_name',
+    declare_collision_object_record_name_arg = DeclareLaunchArgument(
+        'collision_object_record_name',
         default_value='',
-        description='The collision object component name')
+        description='The collision object record name')
 
     # Use xacro package to convert xacro file to URDF
     robot_description_content = Command(['xacro ', LaunchConfiguration('robot_description')])
@@ -38,7 +38,7 @@ def generate_launch_description():
         parameters=[
             {'robot_description': robot_description_content},
             {'planning_group': LaunchConfiguration('planning_group')},
-            {'collision_object_component_name': LaunchConfiguration('collision_object_component_name')}
+            {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')}
         ])
     zx200_excavate_simple_action_server_node = Node(
         package='tms_if_for_opera',
@@ -46,7 +46,7 @@ def generate_launch_description():
         parameters=[
             {'robot_description': robot_description_content},
             {'planning_group': LaunchConfiguration('planning_group')},
-            {'collision_object_component_name': LaunchConfiguration('collision_object_component_name')}
+            {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')}
         ])
     zx200_release_simple_action_server_node = Node(
         package='tms_if_for_opera',
@@ -54,7 +54,7 @@ def generate_launch_description():
         parameters=[
             {'robot_description': robot_description_content},
             {'planning_group': LaunchConfiguration('planning_group')},
-            {'collision_object_component_name': LaunchConfiguration('collision_object_component_name')}
+            {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')}
         ])
     
     # backhoe_excavate_simple_action_server_node = Node(
@@ -63,14 +63,14 @@ def generate_launch_description():
     #     parameters=[
     #         {'robot_description': robot_description_content},
     #         {'planning_group': LaunchConfiguration('planning_group')},
-    #         {'collision_object_component_name': LaunchConfiguration('collision_object_component_name')}
+    #         {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')}
     #     ])
 
     # Build the launch description
     ld = LaunchDescription([
         declare_robot_description_arg,
         declare_planning_group_arg,
-        declare_collision_object_component_name_arg,
+        declare_collision_object_record_name_arg,
         
         zx200_change_pose_action_server_node,
         zx200_excavate_simple_action_server_node,

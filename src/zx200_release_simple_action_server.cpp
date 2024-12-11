@@ -21,7 +21,7 @@ Zx200ReleaseSimpleActionServer::Zx200ReleaseSimpleActionServer(const rclcpp::Nod
 
   this->declare_parameter<std::string>("collision_object_record_name", "");
   this->get_parameter("collision_object_record_name", collision_object_record_name_);
-  RCLCPP_INFO(this->get_logger(), "Collision object component name: %s", collision_object_record_name_.c_str());
+  RCLCPP_INFO(this->get_logger(), "Collision object record name: %s", collision_object_record_name_.c_str());
 
   /* Create server */
   RCLCPP_INFO(this->get_logger(), "Create server.");  // debug
