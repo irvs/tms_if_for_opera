@@ -19,9 +19,9 @@ Zx200ExcavateSimpleActionServer::Zx200ExcavateSimpleActionServer(const rclcpp::N
   this->get_parameter("planning_group", planning_group_);
   RCLCPP_INFO(this->get_logger(), "Planning group: %s", planning_group_.c_str());
 
-  this->declare_parameter<std::string>("collision_object_component_name", "");
-  this->get_parameter("collision_object_component_name", collision_object_component_name_);
-  RCLCPP_INFO(this->get_logger(), "Collision object component name: %s", collision_object_component_name_.c_str());
+  this->declare_parameter<std::string>("collision_object_record_name", "");
+  this->get_parameter("collision_object_record_name", collision_object_record_name_);
+  RCLCPP_INFO(this->get_logger(), "Collision object component name: %s", collision_object_record_name_.c_str());
 
   /* Create server */
   RCLCPP_INFO(this->get_logger(), "Create server.");  // debug
@@ -121,7 +121,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
   };
 
   // Apply collision object
-  apply_collision_objects_from_db(collision_object_component_name_);
+  apply_collision_objects_from_db(collision_object_record_name_);
   apply_collision_objects_ic120_from_db("collision_object_ic120");
 
   // Clear constraints
@@ -239,7 +239,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
   goal_handle->succeed(result);
 }
 
-void Zx200ExcavateSimpleActionServer::apply_collision_objects_from_db(const std::string& component_name)
+void Zx200ExcavateSimpleActionServer::apply_collision_objects_from_db(const std::string& record_name)
 {
   // Load collision objects from DB
   // RCLCPP_INFO(this->get_logger(), "Loading collision objects from DB");
@@ -248,16 +248,16 @@ void Zx200ExcavateSimpleActionServer::apply_collision_objects_from_db(const std:
   mongocxx::database db = client["rostmsdb"];
   mongocxx::collection collection = db["parameter"];
   bsoncxx::builder::stream::document filter_builder;
-  filter_builder << "component_name" << component_name;
+  filter_builder << "record_name" << record_name;
   auto filter = filter_builder.view();
   auto result = collection.find_one(filter);
 
-  if ((component_name != "") && !result)
+  if ((record_name != "") && !result)
   {
     RCLCPP_ERROR(this->get_logger(), "Failed to get collision objects from DB");
     return;
   }
-  else if (component_name == "")
+  else if (record_name == "")
   {
     RCLCPP_INFO(this->get_logger(), "No collision objects to load");
     return;
@@ -318,7 +318,7 @@ void Zx200ExcavateSimpleActionServer::apply_collision_objects_from_db(const std:
   }
 }
 
-void Zx200ExcavateSimpleActionServer::apply_collision_objects_ic120_from_db(const std::string& component_name)
+void Zx200ExcavateSimpleActionServer::apply_collision_objects_ic120_from_db(const std::string& record_name)
 {
   // Load collision objects from DB
   // RCLCPP_INFO(this->get_logger(), "Loading collision objects from DB");
@@ -327,16 +327,16 @@ void Zx200ExcavateSimpleActionServer::apply_collision_objects_ic120_from_db(cons
   mongocxx::database db = client["rostmsdb"];
   mongocxx::collection collection = db["parameter"];
   bsoncxx::builder::stream::document filter_builder;
-  filter_builder << "component_name" << component_name;
+  filter_builder << "record_name" << record_name;
   auto filter = filter_builder.view();
   auto result = collection.find_one(filter);
 
-  if ((component_name != "") && !result)
+  if ((record_name != "") && !result)
   {
     RCLCPP_ERROR(this->get_logger(), "Failed to get collision objects from DB");
     return;
   }
-  else if (component_name == "")
+  else if (record_name == "")
   {
     RCLCPP_INFO(this->get_logger(), "No collision objects to load");
     return;
