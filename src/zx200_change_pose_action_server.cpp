@@ -23,6 +23,10 @@ Zx200ChangePoseActionServer::Zx200ChangePoseActionServer(const rclcpp::NodeOptio
   this->get_parameter("collision_object_record_name", collision_object_record_name_);
   RCLCPP_INFO(this->get_logger(), "Collision object record name: %s", collision_object_record_name_.c_str());
 
+  this->declare_parameter<std::string>("collision_object_ic120_record_name", "");
+  this->get_parameter("collision_object_ic120_record_name", collision_object_ic120_record_name_);
+  RCLCPP_INFO(this->get_logger(), "Collision object ic120 record name: %s", collision_object_ic120_record_name_.c_str());
+
   /* Create server */
   RCLCPP_INFO(this->get_logger(), "Create server.");  // debug
   using namespace std::placeholders;
@@ -409,7 +413,8 @@ void Zx200ChangePoseActionServer::apply_collision_objects_ic120_from_db(const st
   // co_ic120_msg.id = collision_objects_ic120["_id"].get_utf8().value.to_string();
 
   // Apply collision objects
-  shapes::Mesh *m = shapes::createMeshFromResource("package://tms_if_for_opera/collision_objects/ic120/ic120.dae");
+  std::string collision_object_ic120_path = "package://tms_if_for_opera/collision_objects/ic120/" + collision_object_ic120_record_name_;
+  shapes::Mesh *m = shapes::createMeshFromResource(collision_object_ic120_path);
   if (!m)
   {
       RCLCPP_ERROR(this->get_logger(), "Failed to load mesh file!");

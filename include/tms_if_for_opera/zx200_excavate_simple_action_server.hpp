@@ -51,6 +51,7 @@ private:
   std::string planning_group_;
   std::string robot_description_;
   std::string collision_object_record_name_;
+  std::string collision_object_ic120_record_name_;
 
   rclcpp_action::Server<Zx200ExcavateSimple>::SharedPtr action_server_;
   rclcpp::Node::SharedPtr move_group_node_;
