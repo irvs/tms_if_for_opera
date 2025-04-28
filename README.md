@@ -24,3 +24,16 @@ The operation will be explained below.
 
 
 Thus, tms_if_for_opera is an indispensable module for operating OPERA-compatible construction machinery from the task management system of ROS2-TMS for Construction. In the future, we plan to add interface functionalities to the tms_if_for_opera module for OPERA-compatible construction machinery, including not only the backhoe ZX200 but also crawler dumps such as the IC120 and other OPERA-compatible construction machinery.
+
+## 軌道計画
+　[OPERA](https://github.com/pwri-opera)の[zx200_ros2](https://github.com/pwri-opera/zx200_ros2)を使用した場合の軌道計画の一例を説明する。
+
+### 事前準備
+　[ros2_tms_for_construction(Setupセクション)](https://github.com/irvs/ros2_tms_for_construction#Setup)を行う。
+
+### 障害物設定の方法
+　[Moveit2(PlanningAroundObjects)](https://moveit.picknik.ai/main/doc/tutorials/planning_around_objects/planning_around_objects.html)を利用した軌道計画は、[PlanningScene](https://moveit.picknik.ai/humble/doc/examples/planning_scene/planning_scene_tutorial.html)を利用して行われる。
+そのPlanningSceneに障害物を追加する方法は大きく2つあり、それに伴い、tms_if_for_operaで障害物を設定する方法としても2つあるため、それぞれ紹介する。
+1. Rviz2上から追加する
+　
+
