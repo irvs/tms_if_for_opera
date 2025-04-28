@@ -30,7 +30,7 @@ def generate_launch_description():
 
     declare_collision_object_ic120_record_name_arg = DeclareLaunchArgument(
         'collision_object_ic120_record_name',
-        default_value='ic120_padding.dae',
+        default_value='ic120.dae',
         description='The collision object ic120 record name')
 
     # Use xacro package to convert xacro file to URDF

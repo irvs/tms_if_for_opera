@@ -17,6 +17,10 @@
 /** Moveit! **/
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
+#include <moveit_msgs/msg/planning_scene.h>
+#include <moveit_msgs/msg/link_padding.h>
+#include <moveit_msgs/msg/constraints.hpp>
+#include <moveit_msgs/msg/joint_constraint.hpp>
 
 #include <moveit_msgs/msg/display_robot_state.hpp>
 #include <moveit_msgs/msg/display_trajectory.hpp>
@@ -60,6 +64,7 @@ private:
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
   // std::vector<double> current_joint_values_;
   std::vector<std::string> joint_names_;
+  std::vector<std::string> link_names_;
   std::map<std::string, double> current_joint_values_;
   // std::map<std::string, double> target_joint_values_;
   // ExcavatorIK excavator_ik_;

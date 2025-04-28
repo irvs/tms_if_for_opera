@@ -128,16 +128,48 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
   apply_collision_objects_from_db(collision_object_record_name_);
   apply_collision_objects_ic120_from_db("collision_object_ic120");
 
+  // Get link info
+  link_names_ = move_group_->getLinkNames();
+  moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
+  // PlanningScene メッセージの作成
+  moveit_msgs::msg::PlanningScene planning_scene_msg;
+  planning_scene_msg.is_diff = true;  // 差分更新
+  // パディングを設定するための LinkPadding メッセージ
+  moveit_msgs::msg::LinkPadding padding_msg;
+  std::vector<std::string> padding_link_list = {"boom_link", "arm_link", "bucket_link", "bucket_end_link"};
+  for (size_t i = 0; i < link_names_.size(); i++)
+  {
+      // リンク名が padding_link_list に含まれているかチェック
+      if (std::find(padding_link_list.begin(), padding_link_list.end(), link_names_[i]) == padding_link_list.end())
+      {
+          continue;  // 含まれていなければスキップ
+      }
+      RCLCPP_INFO(this->get_logger(), "Link Name: %s", link_names_[i].c_str());
+      // 新しく padding_msg を作成
+      moveit_msgs::msg::LinkPadding padding_msg;
+      padding_msg.link_name = link_names_[i];  // パディングを適用するリンク
+      padding_msg.padding = 0.25;
+      // パディングリストに追加
+      planning_scene_msg.link_padding.push_back(padding_msg);
+  }
+  planning_scene_interface_.applyPlanningScene(planning_scene_msg);
+
   // Clear constraints
   // move_group_->clearPathConstraints();
+
+  double radians = atan2(std::abs(goal->position_with_angle.position.y), -1.0 * goal->position_with_angle.position.x);
+  radians = M_PI - radians;
+  double offset = 1.5;
+  RCLCPP_INFO(this->get_logger(), "%f", radians);
+
 
   /*** Move to a position 1 m higher than the target excavation position ***/
   // Get target joint values
   std::vector<double> target_joint_values(joint_names_.size(), 0.0);
-  for (double i = 0.0; i < M_PI / 3.0; i += 0.01)
+  for (double i = 1.5; i < M_PI; i += 0.01)
   {
-    if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x, goal->position_with_angle.position.y,
-                                            goal->position_with_angle.position.z + 2.0, i, target_joint_values) == 0)
+    if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x + offset*cos(radians) , goal->position_with_angle.position.y - offset*sin(radians),
+                                            goal->position_with_angle.position.z - 0.5, i, target_joint_values) == 0)
     {
       break;
     }
@@ -169,19 +201,37 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
     return;
   }
 
-  /*** Move to a target excavation position ***/
-  for (double i = 0.0; i < M_PI / 3.0; i += 0.01)
-  {
-    if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x, goal->position_with_angle.position.y,
-                                            goal->position_with_angle.position.z, i, target_joint_values) == 0)
-    {
-      break;
-    }
+  RCLCPP_INFO(this->get_logger(), "Move to a position 1 m higher than the target excavation position succeeded");
 
-    if(i >= M_PI / 3.0 - 0.01)
+  // std::vector<double> target_joint_values2(joint_names_.size(), 0.0);
+  // /*** Move to a target excavation position ***/
+  // for (double i = 2.0; i > 0.01; i -= 0.01)
+  // {
+  //   if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x - offset*cos(radians), goal->position_with_angle.position.y + offset*sin(radians),
+  //                                           goal->position_with_angle.position.z + 0.5, i, target_joint_values2) == 0)
+  //   {
+  //     // RCLCPP_INFO(this->get_logger(), "%f", i);
+  //     break;
+  //   }
+  //   // RCLCPP_INFO(this->get_logger(), "%f", i);
+  //   // if(i >= 0.01)
+  //   // {
+  //   //   handle_error("Failed to calculate inverse kinematics");
+  //   //   return;
+  //   // }
+  // }
+
+  // move_group_->setJointValueTarget(target_joint_values2);
+
+  /*** Exacvate ***/
+  // Get current joint values
+  target_joint_values = move_group_->getCurrentJointValues();
+  for (size_t i = 0; i < joint_names_.size(); i++)
+  {
+    if (joint_names_[i] == "arm_joint")
     {
-      handle_error("Failed to calculate inverse kinematics");
-      return;
+      target_joint_values[i] = target_joint_values[i] + 0.3;  // 掘削時のarmの目標角度[rad]
+      break;
     }
   }
 
@@ -205,14 +255,54 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
     return;
   }
 
-  /*** Exacvate ***/
+  RCLCPP_INFO(this->get_logger(), "Move to target excavation position succeeded");
+
+  // std::vector<double> target_joint_values3(joint_names_.size(), 0.0);
+  // /*** Move to a target excavation position ***/
+  // for (double i = 3.0; i > 0.01; i -= 0.01)
+  // {
+  //   if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x - 2.0*offset*cos(radians), goal->position_with_angle.position.y + 2.0*offset*sin(radians),
+  //                                           goal->position_with_angle.position.z + 1.5, i, target_joint_values3) == 0)
+  //   {
+  //     // RCLCPP_INFO(this->get_logger(), "%f", i);
+  //     break;
+  //   }
+  //   // RCLCPP_INFO(this->get_logger(), "%f", i);
+  //   // if(i >= 0.01)
+  //   // {
+  //   //   handle_error("Failed to calculate inverse kinematics");
+  //   //   return;
+  //   // }
+  // }
+
+  // move_group_->setJointValueTarget(target_joint_values3);
+
+  // // Plan
+  // feedback->state = "PLANNING";
+  // goal_handle->publish_feedback(feedback);
+  // if (move_group_->plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  // {
+  //   handle_error("Failed to plan");
+  //   return;
+  // }
+
+  // // Execute
+  // feedback->state = "EXECUTING";
+  // goal_handle->publish_feedback(feedback);
+  // if (move_group_->execute(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  // {
+  //   handle_error("Failed to execute");
+  //   return;
+  // }
+
+  // /*** Exacvate ***/
   // Get current joint values
   target_joint_values = move_group_->getCurrentJointValues();
   for (size_t i = 0; i < joint_names_.size(); i++)
   {
     if (joint_names_[i] == "bucket_joint")
     {
-      target_joint_values[i] = 1.92;  // 掘削時のバケットの目標角度[rad]
+      target_joint_values[i] = target_joint_values[i] + 0.8;  // 掘削時のバケットの目標角度[rad]
       break;
     }
   }

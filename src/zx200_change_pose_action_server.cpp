@@ -47,7 +47,6 @@ Zx200ChangePoseActionServer::Zx200ChangePoseActionServer(const rclcpp::NodeOptio
   std::thread([this]() { executor_.spin(); }).detach();
 
   move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, planning_group_);
-  // moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
 
   move_group_->setMaxVelocityScalingFactor(1.0);
   move_group_->setMaxAccelerationScalingFactor(1.0);
@@ -107,6 +106,32 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
   // Apply collision object
   apply_collision_objects_from_db(collision_object_record_name_);
   apply_collision_objects_ic120_from_db("collision_object_ic120");
+
+  // Get link info
+  link_names_ = move_group_->getLinkNames();
+  moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
+  // PlanningScene メッセージの作成
+  moveit_msgs::msg::PlanningScene planning_scene_msg;
+  planning_scene_msg.is_diff = true;  // 差分更新
+  // パディングを設定するための LinkPadding メッセージ
+  moveit_msgs::msg::LinkPadding padding_msg;
+  std::vector<std::string> padding_link_list = {"boom_link", "arm_link", "bucket_link", "bucket_end_link"};
+  for (size_t i = 0; i < link_names_.size(); i++)
+  {
+      // リンク名が padding_link_list に含まれているかチェック
+      if (std::find(padding_link_list.begin(), padding_link_list.end(), link_names_[i]) == padding_link_list.end())
+      {
+          continue;  // 含まれていなければスキップ
+      }
+      RCLCPP_INFO(this->get_logger(), "Link Name: %s", link_names_[i].c_str());
+      // 新しく padding_msg を作成
+      moveit_msgs::msg::LinkPadding padding_msg;
+      padding_msg.link_name = link_names_[i];  // パディングを適用するリンク
+      padding_msg.padding = 0.25;
+      // パディングリストに追加
+      planning_scene_msg.link_padding.push_back(padding_msg);
+  }
+  planning_scene_interface_.applyPlanningScene(planning_scene_msg);
 
   // Clear constraints
   // move_group_->clearPathConstraints();
