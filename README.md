@@ -119,9 +119,6 @@ Thus, tms_if_for_opera is an indispensable module for operating OPERA-compatible
         これを以下のようなjson形式でMongoDB中のparameterコレクションに登録する。
         primitive_type:1 -> Box
         ```json
-        /** 
-        * Paste one or more documents here
-        */
         {
         "model_name": "zx200",
         "type": "static",
@@ -284,35 +281,31 @@ Thus, tms_if_for_opera is an indispensable module for operating OPERA-compatible
         cd ~/ros2-tms-for-construction_ws && source install/setup.bash
         ros2 topic pub /tms_db_collision tms_msg_db/msg/TmsdbCollision "{ model_name: 'zx200', type: 'dynamic', filepath: '/path/to/meshfile(.dae)'}"
         ```
+        
 ### 追加した障害物を考慮した軌道計画
 
+以下のコマンドでtms_if_for_operaを立ち上げ、通常通り、[OPERA](https://github.com/pwri-opera)の[zx200_ros2](https://github.com/pwri-opera/zx200_ros2)と[ros2_tms_for_construction](https://github.com/irvs/ros2_tms_for_construction)を利用したタスクの実行を行う。
 
-    以下のコマンドでtms_if_for_operaを立ち上げ、通常通り、[OPERA](https://github.com/pwri-opera)の[zx200_ros2](https://github.com/pwri-opera/zx200_ros2)と[ros2_tms_for_construction](https://github.com/irvs/ros2_tms_for_construction)を利用したタスクの実行を行う。
-    ここで、collision_object_record_nameにはRviz2上から障害物を追加してMongoDBに格納した場合のrecord_name、collision_object_dump_record_nameにはmeshモデルから追加したMongoDBに格納した場合のrecord_nameを指定する。
-    どちらか一方、もしくはどちらも指定しない場合は障害物は考慮されない。
+ここで、collision_object_record_nameにはRviz2上から障害物を追加してMongoDBに格納した場合のrecord_name、collision_object_dump_record_nameにはmeshモデルから追加したMongoDBに格納した場合のrecord_nameを指定する。
+どちらか一方、もしくはどちらも指定しない場合は障害物は考慮されない。
 
-    ```bash
-    cd ~/ros2-tms-for-construction_ws && source install/setup.bash
-    ros2 launch tms_if_for_opera tms_if_for_opera.launch.py collision_object_record_name:='collision_objects' collision_object_dump_record_name:='collision_object_ic120'
-    ```
+```bash
+cd ~/ros2-tms-for-construction_ws && source install/setup.bash
+ros2 launch tms_if_for_opera tms_if_for_opera.launch.py collision_object_record_name:='collision_objects' collision_object_dump_record_name:='collision_object_ic120'
+```
 
-    例：追加した障害物を考慮した軌道計画を試すためのコマンド（上記のコマンドの実行の他に必要な部分を補足）
+例：追加した障害物を考慮した軌道計画を試すためのコマンド（上記のコマンドの実行の他に必要な部分を補足）
 
-    ```bash
-    # 1つ目のターミナル
-    cd ~/ros2-tms-for-construction_ws && source install/setup.bash
-    ros2 launch zx200_unity zx200_standby.launch.py 
-    ```
-    ```bash
-    # 1つ目のターミナル
-    cd ~/ros2-tms-for-construction_ws && source install/setup.bash
-    ros2 launch zx200_unity zx200_standby.launch.py 
-    ```
-    ```bash
-    # 2つ目のターミナル
-    cd ~/ros2-tms-for-construction_ws && source install/setup.bash
-    ros2 launch tms_ts_launch tms_ts_construction.launch.py task_id:=<task_id>
-    ```
-    ※<task_id>は、zx200を使用するタスクのidを指定する。
+```bash
+# 1つ目のターミナル
+cd ~/ros2-tms-for-construction_ws && source install/setup.bash
+ros2 launch zx200_unity zx200_standby.launch.py 
+```
+```bash
+# 2つ目のターミナル
+cd ~/ros2-tms-for-construction_ws && source install/setup.bash
+ros2 launch tms_ts_launch tms_ts_construction.launch.py task_id:=<task_id>
+```
+※<task_id>は、zx200を使用するタスクのidを指定する。
     
 
