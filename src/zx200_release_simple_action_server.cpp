@@ -23,9 +23,9 @@ Zx200ReleaseSimpleActionServer::Zx200ReleaseSimpleActionServer(const rclcpp::Nod
   this->get_parameter("collision_object_record_name", collision_object_record_name_);
   RCLCPP_INFO(this->get_logger(), "Collision object record name: %s", collision_object_record_name_.c_str());
 
-  this->declare_parameter<std::string>("collision_object_ic120_record_name", "");
-  this->get_parameter("collision_object_ic120_record_name", collision_object_ic120_record_name_);
-  RCLCPP_INFO(this->get_logger(), "Collision object ic120 record name: %s", collision_object_ic120_record_name_.c_str());
+  this->declare_parameter<std::string>("collision_object_dump_record_name", "");
+  this->get_parameter("collision_object_dump_record_name", collision_object_dump_record_name_);
+  RCLCPP_INFO(this->get_logger(), "Collision object dump record name: %s", collision_object_dump_record_name_.c_str());
 
   /* Create server */
   RCLCPP_INFO(this->get_logger(), "Create server.");  // debug
@@ -105,7 +105,8 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
 {
   // Apply collision object
   apply_collision_objects_from_db(collision_object_record_name_);
-  apply_collision_objects_ic120_from_db("collision_object_ic120");
+  apply_collision_objects_dump_from_db(collision_object_dump_record_name_);
+
 
   // Get link info
   link_names_ = move_group_->getLinkNames();
@@ -301,7 +302,7 @@ void Zx200ReleaseSimpleActionServer::apply_collision_objects_from_db(const std::
   }
 }
 
-void Zx200ReleaseSimpleActionServer::apply_collision_objects_ic120_from_db(const std::string& record_name)
+void Zx200ReleaseSimpleActionServer::apply_collision_objects_dump_from_db(const std::string& record_name)
 {
   // Load collision objects from DB
   // RCLCPP_INFO(this->get_logger(), "Loading collision objects from DB");
@@ -333,19 +334,23 @@ void Zx200ReleaseSimpleActionServer::apply_collision_objects_ic120_from_db(const
   // std::vector<std::string> object_ids = planning_scene_interface_.getKnownObjectNames();
   // planning_scene_interface_.removeCollisionObjects(object_ids);
 
-  auto collision_objects_ic120 = result->view();
-  moveit_msgs::msg::CollisionObject co_ic120_msg;
-  // RCLCPP_INFO(this->get_logger(), "Retrieved document: %s", bsoncxx::to_json(collision_objects_ic120).c_str());
-  co_ic120_msg.header.frame_id = move_group_->getPlanningFrame();
-  // co_ic120_msg.id = collision_objects_ic120["_id"].get_utf8().value.to_string();
+  auto collision_objects_dump = result->view();
+  moveit_msgs::msg::CollisionObject co_dump_msg;
+  // RCLCPP_INFO(this->get_logger(), "Retrieved document: %s", bsoncxx::to_json(collision_objects_dump).c_str());
+  co_dump_msg.header.frame_id = move_group_->getPlanningFrame();
+  // co_dump_msg.id = collision_objects_dump["_id"].get_utf8().value.to_string();
 
   // Apply collision objects
-  std::string collision_object_ic120_path = "package://tms_if_for_opera/collision_objects/ic120/" + collision_object_ic120_record_name_;
-  shapes::Mesh *m = shapes::createMeshFromResource(collision_object_ic120_path);
+  auto mesh_binary = collision_objects_dump["data"].get_binary();
+  std::string temp_mesh_path = "/tmp/temp_dump_mesh.dae";  // .dae拡張子！（元ファイル形式に合わせる）
+  std::ofstream ofs(temp_mesh_path, std::ios::binary);
+  ofs.write(reinterpret_cast<const char*>(mesh_binary.bytes), mesh_binary.size);
+  ofs.close();
+  shapes::Mesh *m = shapes::createMeshFromResource("file://" + temp_mesh_path);
   if (!m)
   {
-      RCLCPP_ERROR(this->get_logger(), "Failed to load mesh file!");
-      return;
+    RCLCPP_ERROR(this->get_logger(), "Failed to load mesh from temporary file!");
+    return;
   }
   shape_msgs::msg::Mesh mesh_msg;
   shapes::ShapeMsg shape_msg;
@@ -354,24 +359,24 @@ void Zx200ReleaseSimpleActionServer::apply_collision_objects_ic120_from_db(const
 
   // Get collision object pose
   geometry_msgs::msg::Pose mesh_pose;
-  mesh_pose.position.x = collision_objects_ic120["x"].get_double().value;
-  mesh_pose.position.y = collision_objects_ic120["y"].get_double().value;
-  mesh_pose.position.z = collision_objects_ic120["z"].get_double().value;
-  mesh_pose.orientation.x = collision_objects_ic120["qx"].get_double().value;
-  mesh_pose.orientation.y = collision_objects_ic120["qy"].get_double().value;
-  mesh_pose.orientation.z = collision_objects_ic120["qz"].get_double().value;
-  mesh_pose.orientation.w = collision_objects_ic120["qw"].get_double().value;
+  mesh_pose.position.x = collision_objects_dump["x"].get_double().value;
+  mesh_pose.position.y = collision_objects_dump["y"].get_double().value;
+  mesh_pose.position.z = collision_objects_dump["z"].get_double().value;
+  mesh_pose.orientation.x = collision_objects_dump["qx"].get_double().value;
+  mesh_pose.orientation.y = collision_objects_dump["qy"].get_double().value;
+  mesh_pose.orientation.z = collision_objects_dump["qz"].get_double().value;
+  mesh_pose.orientation.w = collision_objects_dump["qw"].get_double().value;
 
   // CollisionObjectにメッシュを追加
-  co_ic120_msg.meshes.push_back(mesh_msg);
-  co_ic120_msg.mesh_poses.push_back(mesh_pose);
-  co_ic120_msg.operation = moveit_msgs::msg::CollisionObject::ADD;
+  co_dump_msg.meshes.push_back(mesh_msg);
+  co_dump_msg.mesh_poses.push_back(mesh_pose);
+  co_dump_msg.operation = moveit_msgs::msg::CollisionObject::ADD;
 
   // Planning Sceneにオブジェクトを追加
   std::vector<moveit_msgs::msg::CollisionObject> collision_objects;
-  collision_objects.push_back(co_ic120_msg);
+  collision_objects.push_back(co_dump_msg);
 
-  planning_scene_interface_.applyCollisionObject(co_ic120_msg);
+  planning_scene_interface_.applyCollisionObject(co_dump_msg);
 
 }
 

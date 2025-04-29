@@ -33,7 +33,22 @@ Thus, tms_if_for_opera is an indispensable module for operating OPERA-compatible
 
 ### 障害物設定の方法
 　[Moveit2(PlanningAroundObjects)](https://moveit.picknik.ai/main/doc/tutorials/planning_around_objects/planning_around_objects.html)を利用した軌道計画は、[PlanningScene](https://moveit.picknik.ai/humble/doc/examples/planning_scene/planning_scene_tutorial.html)を利用して行われる。
-そのPlanningSceneに障害物を追加する方法は大きく2つあり、それに伴い、tms_if_for_operaで障害物を設定する方法としても2つあるため、それぞれ紹介する。
-1. Rviz2上から追加する
-　
+そのPlanningSceneに障害物を追加する方法は2つあり、それに伴い、tms_if_for_operaで障害物を設定する方法としても2つあるため、それぞれ紹介する。
+
+1. Rviz2上から追加
+    1. 軌道計画時のRviz2を起動
+    ```bash
+    cd ~/ros2-tms-for-construction_ws && source install/setup.bash
+    ros2 launch zx200_unity zx200_standby.launch.py
+    ```
+    2. 画像中の手順に従い、障害物を設定後、エクスポート
+    ![](docs/AddCollisionObjects.png)
+
+    例：ピット内の土山を掘ることを想定した場合の障害物設定
+    
+
+    　
+
+    3. データベースに登録
+
 

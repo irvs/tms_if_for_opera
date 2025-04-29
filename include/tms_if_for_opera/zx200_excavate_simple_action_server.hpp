@@ -39,6 +39,8 @@
 
 #include "tms_if_for_opera/excavator_ik.hpp"
 
+#include <fstream>
+
 namespace tms_if_for_opera
 {
 class Zx200ExcavateSimpleActionServer : public rclcpp::Node
@@ -53,7 +55,7 @@ private:
   std::string planning_group_;
   std::string robot_description_;
   std::string collision_object_record_name_;
-  std::string collision_object_ic120_record_name_;
+  std::string collision_object_dump_record_name_;
 
   rclcpp_action::Server<Zx200ExcavateSimple>::SharedPtr action_server_;
   rclcpp::Node::SharedPtr move_group_node_;
@@ -77,7 +79,7 @@ private:
   void execute(const std::shared_ptr<GoalHandleZx200ExcavateSimple> goal_handle);
 
   void apply_collision_objects_from_db(const std::string& record_name);
-  void apply_collision_objects_ic120_from_db(const std::string& record_name);
+  void apply_collision_objects_dump_from_db(const std::string& record_name);
   double getDoubleValue(const bsoncxx::document::element& element);
 };
 }  // namespace tms_if_for_opera
