@@ -37,18 +37,282 @@ Thus, tms_if_for_opera is an indispensable module for operating OPERA-compatible
 
 1. Rviz2上から追加
     1. 軌道計画時のRviz2を起動
-    ```bash
-    cd ~/ros2-tms-for-construction_ws && source install/setup.bash
-    ros2 launch zx200_unity zx200_standby.launch.py
-    ```
+        ```bash
+        cd ~/ros2-tms-for-construction_ws && source install/setup.bash
+        ros2 launch zx200_unity zx200_standby.launch.py
+        ```
     2. 画像中の手順に従い、障害物を設定後、エクスポート
-    ![](docs/AddCollisionObjects.png)
+        ![](docs/AddCollisionObjects.png)
 
-    例：ピット内の土山を掘ることを想定した場合の障害物設定
-    
-
-    　
+        例：ピット内の土山を掘ることを想定した場合の障害物設定
+        ![](docs/AddCollisionObjects_example.png)
 
     3. データベースに登録
+        
+        2.の例における出力ファイルは以下のようになる。
+        出力される各パラメータ中で必要となるものは、*の印のある部分がObject名、そこからPosition(x,y,z)、Rotation(qx,qy,qz,qw)と続き、1行飛ばして、Object形状種類、Objectサイズである。
+        ```txt
+        # Example.scene
+        (noname)+
+        * box2
+        -4 4 8
+        0 0 0 1
+        1
+        box
+        1 1 16
+        0 0 0
+        0 0 0 1
+        0 0 0 0
+        0
+        * floor
+        0 0 -2
+        0 0 0 1
+        1
+        box
+        100 100 0.001
+        0 0 0
+        0 0 0 1
+        0 0 0 0
+        0
+        * wall1
+        -4.795 -6.244 0
+        0 0 0 1
+        1
+        box
+        0.05 8 4
+        0 0 0
+        0 0 0 1
+        0 0 0 0
+        0
+        * wall2
+        0.205 -10.244 0
+        0 0 0.707107 0.707107
+        1
+        box
+        0.05 10 4
+        0 0 0
+        0 0 0 1
+        0 0 0 0
+        0
+        * wall3
+        0.205 -2.225 0
+        0 0 0.707107 0.707107
+        1
+        box
+        0.05 10 4
+        0 0 0
+        0 0 0 1
+        0 0 0 0
+        0
+        * wall4
+        5.205 -6.244 0
+        0 0 0 1
+        1
+        box
+        0.05 8 4
+        0 0 0
+        0 0 0 1
+        0 0 0 0
+        0
+        .
+        ```
+        これを以下のようなjson形式でMongoDB中のparameterコレクションに登録する。
+        primitive_type:1 -> Box
+        ```json
+        /** 
+        * Paste one or more documents here
+        */
+        {
+        "model_name": "zx200",
+        "type": "static",
+        "description": "Collision objects for demo 2024/02/22~.",
+        "collision_objects": [
+            {
+            "id": "floor",
+            "frame_id": "",
+            "primitive_type": 1,
+            "dimensions": [
+                100,
+                100,
+                0.001
+            ],
+            "pose": {
+                "position": {
+                "x": 0,
+                "y": 0,
+                "z": -2
+                },
+                "orientation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+                }
+            }
+            },
+            {
+            "id": "wall1",
+            "frame_id": "",
+            "primitive_type": 1,
+            "dimensions": [
+                0.05,
+                8,
+                4
+            ],
+            "pose": {
+                "position": {
+                "x": -4.795,
+                "y": -6.244,
+                "z": 0
+                },
+                "orientation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+                }
+            }
+            },
+            {
+            "id": "wall2",
+            "frame_id": "",
+            "primitive_type": 1,
+            "dimensions": [
+                0.05,
+                10,
+                4
+            ],
+            "pose": {
+                "position": {
+                "x": 0.205,
+                "y": -10.244,
+                "z": 0
+                },
+                "orientation": {
+                "x": 0,
+                "y": 0,
+                "z": 0.7071,
+                "w": 0.7071
+                }
+            }
+            },
+            {
+            "id": "wall3",
+            "frame_id": "",
+            "primitive_type": 1,
+            "dimensions": [
+                0.05,
+                10,
+                4
+            ],
+            "pose": {
+                "position": {
+                "x": 0.205,
+                "y": -2.225,
+                "z": 0
+                },
+                "orientation": {
+                "x": 0,
+                "y": 0,
+                "z": 0.7071,
+                "w": 0.7071
+                }
+            }
+            },
+            {
+            "id": "wall4",
+            "frame_id": "",
+            "primitive_type": 1,
+            "dimensions": [
+                0.05,
+                8,
+                4
+            ],
+            "pose": {
+                "position": {
+                "x": 5.205,
+                "y": -6.244,
+                "z": 0
+                },
+                "orientation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+                }
+            }
+            },
+            {
+            "id": "box2",
+            "frame_id": "",
+            "primitive_type": 1,
+            "dimensions": [
+                1,
+                1,
+                16
+            ],
+            "pose": {
+                "position": {
+                "x": -4,
+                "y": 4,
+                "z": 8
+                },
+                "orientation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+                }
+            }
+            }
+        ],
+        "record_name": "collision_objects"
+        }
+        ```
+2. meshモデル(.dae)から追加
+    1. meshモデルをMongoDB中のparameterコレクションに登録
 
+        それぞれのターミナルで以下のコマンドを実行
+        ```bash
+        # 1つ目のターミナル
+        cd ~/ros2-tms-for-construction_ws && source install/setup.bash
+        ros2 run tms_db_manager tms_db_writer_collision
+        ```
+        ここで、model_nameは軌道計画を行うバックホウの名前(ここではzx200)、filepathは絶対パスで指定すると良い。
+        ```bash
+        # 2つ目のターミナル
+        cd ~/ros2-tms-for-construction_ws && source install/setup.bash
+        ros2 topic pub /tms_db_collision tms_msg_db/msg/TmsdbCollision "{ model_name: 'zx200', type: 'dynamic', filepath: '/path/to/meshfile(.dae)'}"
+        ```
+### 追加した障害物を考慮した軌道計画
+
+
+    以下のコマンドでtms_if_for_operaを立ち上げ、通常通り、[OPERA](https://github.com/pwri-opera)の[zx200_ros2](https://github.com/pwri-opera/zx200_ros2)と[ros2_tms_for_construction](https://github.com/irvs/ros2_tms_for_construction)を利用したタスクの実行を行う。
+    ここで、collision_object_record_nameにはRviz2上から障害物を追加してMongoDBに格納した場合のrecord_name、collision_object_dump_record_nameにはmeshモデルから追加したMongoDBに格納した場合のrecord_nameを指定する。
+    どちらか一方、もしくはどちらも指定しない場合は障害物は考慮されない。
+
+    ```bash
+    cd ~/ros2-tms-for-construction_ws && source install/setup.bash
+    ros2 launch tms_if_for_opera tms_if_for_opera.launch.py collision_object_record_name:='collision_objects' collision_object_dump_record_name:='collision_object_ic120'
+    ```
+
+    例：追加した障害物を考慮した軌道計画を試すためのコマンド（上記のコマンドの実行の他に必要な部分を補足）
+
+    ```bash
+    # 1つ目のターミナル
+    cd ~/ros2-tms-for-construction_ws && source install/setup.bash
+    ros2 launch zx200_unity zx200_standby.launch.py 
+    ```
+    ```bash
+    # 1つ目のターミナル
+    cd ~/ros2-tms-for-construction_ws && source install/setup.bash
+    ros2 launch zx200_unity zx200_standby.launch.py 
+    ```
+    ```bash
+    # 2つ目のターミナル
+    cd ~/ros2-tms-for-construction_ws && source install/setup.bash
+    ros2 launch tms_ts_launch tms_ts_construction.launch.py task_id:=<task_id>
+    ```
+    ※<task_id>は、zx200を使用するタスクのidを指定する。
+    
 
