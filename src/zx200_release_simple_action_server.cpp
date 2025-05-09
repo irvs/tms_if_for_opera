@@ -47,6 +47,9 @@ Zx200ReleaseSimpleActionServer::Zx200ReleaseSimpleActionServer(const rclcpp::Nod
   std::thread([this]() { executor_.spin(); }).detach();
 
   move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, planning_group_);
+  move_group_options_ = std::make_shared<moveit::planning_interface::MoveGroupInterface::Options>(planning_group_, "robot_description", "/zx200");
+  move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, *move_group_options_); 
+  
   // moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
 
   move_group_->setMaxVelocityScalingFactor(1.0);

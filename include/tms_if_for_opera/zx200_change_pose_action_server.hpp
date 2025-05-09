@@ -60,6 +60,7 @@ private:
   rclcpp_action::Server<Zx200ChangePose>::SharedPtr action_server_;
   rclcpp::Node::SharedPtr move_group_node_;
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
+  std::shared_ptr<moveit::planning_interface::MoveGroupInterface::Options> move_group_options_;
   rclcpp::executors::SingleThreadedExecutor executor_;
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
   // std::vector<double> current_joint_values_;

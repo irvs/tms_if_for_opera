@@ -40,6 +40,7 @@ def generate_launch_description():
     zx200_change_pose_action_server_node = Node(
         package='tms_if_for_opera',
         executable='zx200_change_pose_action_server',
+        namespace='zx200',
         parameters=[
             {'robot_description': robot_description_content},
             {'planning_group': LaunchConfiguration('planning_group')},
@@ -49,6 +50,7 @@ def generate_launch_description():
     zx200_excavate_simple_action_server_node = Node(
         package='tms_if_for_opera',
         executable='zx200_excavate_simple_action_server',
+        namespace='zx200',
         parameters=[
             {'robot_description': robot_description_content},
             {'planning_group': LaunchConfiguration('planning_group')},
@@ -58,6 +60,7 @@ def generate_launch_description():
     zx200_release_simple_action_server_node = Node(
         package='tms_if_for_opera',
         executable='zx200_release_simple_action_server',
+        namespace='zx200',
         parameters=[
             {'robot_description': robot_description_content},
             {'planning_group': LaunchConfiguration('planning_group')},
