@@ -39,7 +39,7 @@ int ExcavatorIK::loadURDF(const std::string& urdf_file)
   // TODO: pitch回転以外への対応
   // TODO: position.z==0のときの例外処理
   std::vector<double> rpy = { 0.0, 0.0, 0.0 };
-  joint_offset_.resize(4, 0.0);
+  joint_offset_.resize(5, 0.0);
   origin_body_to_boom_.rotation.getRPY(rpy[0], rpy[1], rpy[2]);
   joint_offset_[1] -= rpy[1];
   joint_offset_[2] -= rpy[1];
