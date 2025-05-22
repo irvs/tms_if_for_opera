@@ -4,6 +4,8 @@
 // #include <moveit_msgs/msg/orientation_constraint.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <moveit/robot_state/robot_state.h>
+
 
 using namespace tms_if_for_opera;
 
@@ -183,102 +185,111 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
     }
   }
 
-  move_group_->setJointValueTarget(target_joint_values);
-
-  // Plan
-  feedback->state = "PLANNING";
-  goal_handle->publish_feedback(feedback);
-  moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-  if (move_group_->plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
-  {
-    handle_error("Failed to plan");
-    return;
-  }
-
-  // Execute
-  feedback->state = "EXECUTING";
-  goal_handle->publish_feedback(feedback);
-  if (move_group_->execute(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
-  {
-    handle_error("Failed to execute");
-    return;
-  }
-
-  RCLCPP_INFO(this->get_logger(), "Move to a position 1 m higher than the target excavation position succeeded");
-
-  // std::vector<double> target_joint_values2(joint_names_.size(), 0.0);
-  // /*** Move to a target excavation position ***/
-  // for (double i = 2.0; i > 0.01; i -= 0.01)
-  // {
-  //   if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x - offset*cos(radians), goal->position_with_angle.position.y + offset*sin(radians),
-  //                                           goal->position_with_angle.position.z + 0.5, i, target_joint_values2) == 0)
-  //   {
-  //     // RCLCPP_INFO(this->get_logger(), "%f", i);
-  //     break;
-  //   }
-  //   // RCLCPP_INFO(this->get_logger(), "%f", i);
-  //   // if(i >= 0.01)
-  //   // {
-  //   //   handle_error("Failed to calculate inverse kinematics");
-  //   //   return;
-  //   // }
-  // }
-
-  // move_group_->setJointValueTarget(target_joint_values2);
-
-  /*** Exacvate ***/
-  // Get current joint values
-  target_joint_values = move_group_->getCurrentJointValues();
-  for (size_t i = 0; i < joint_names_.size(); i++)
-  {
-    if (joint_names_[i] == "arm_joint")
-    {
-      target_joint_values[i] = target_joint_values[i] + 0.3;  // 掘削時のarmの目標角度[rad]
-      break;
+  std::vector<moveit::planning_interface::MoveGroupInterface::Plan> plans;
+  std::vector<std::vector<double>> joint_targets;
+  
+  joint_targets.push_back(target_joint_values);
+  
+  // arm_joint を追加で動かした状態
+  for (size_t i = 0; i < joint_names_.size(); i++) {
+    if (joint_names_[i] == "arm_joint") {
+      target_joint_values[i] += 0.3;
     }
   }
-
-  move_group_->setJointValueTarget(target_joint_values);
-
-  // Plan
-  feedback->state = "PLANNING";
-  goal_handle->publish_feedback(feedback);
-  if (move_group_->plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
-  {
-    handle_error("Failed to plan");
+  joint_targets.push_back(target_joint_values);
+  
+  // bucket_joint を追加で動かした状態
+  for (size_t i = 0; i < joint_names_.size(); i++) {
+    if (joint_names_[i] == "bucket_joint") {
+      target_joint_values[i] += 0.8;
+    }
+  }
+  joint_targets.push_back(target_joint_values);
+  
+  // 最初の状態を取得
+  moveit::core::RobotState start_state(*move_group_->getCurrentState());
+  
+  bool planning_success = true;
+  
+  for (const auto& joints : joint_targets) {
+    move_group_->setStartState(start_state);
+    move_group_->setJointValueTarget(joints);
+  
+    moveit::planning_interface::MoveGroupInterface::Plan plan;
+    if (move_group_->plan(plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+      RCLCPP_ERROR(this->get_logger(), "Failed to plan to one of the waypoints");
+      planning_success = false;
+      break;
+    }
+  
+    plans.push_back(plan);  // 成功したら保持
+  
+    // 次の出発点を更新（まだexecuteしてないけど、stateは変える）
+    start_state.setJointGroupPositions(
+      move_group_->getRobotModel()->getJointModelGroup(move_group_->getName()), joints);
+    start_state.update();
+  }
+  
+  if (!planning_success) {
+    RCLCPP_WARN(this->get_logger(), "Aborting execution due to planning failure.");
     return;
   }
-
-  // Execute
-  feedback->state = "EXECUTING";
-  goal_handle->publish_feedback(feedback);
-  if (move_group_->execute(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
-  {
-    handle_error("Failed to execute");
-    return;
+  
+  // 成功した場合、順番に実行
+  for (const auto& plan : plans) {
+    if (!move_group_->execute(plan)) {
+      RCLCPP_ERROR(this->get_logger(), "Execution failed for one of the trajectories");
+      return;
+    }
   }
+  
 
-  RCLCPP_INFO(this->get_logger(), "Move to target excavation position succeeded");
+  
 
-  // std::vector<double> target_joint_values3(joint_names_.size(), 0.0);
-  // /*** Move to a target excavation position ***/
-  // for (double i = 3.0; i > 0.01; i -= 0.01)
+  // // Execute
+  // feedback->state = "EXECUTING";
+  // goal_handle->publish_feedback(feedback);
+  // if (move_group_->execute(combined_trajectory) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
   // {
-  //   if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x - 2.0*offset*cos(radians), goal->position_with_angle.position.y + 2.0*offset*sin(radians),
-  //                                           goal->position_with_angle.position.z + 1.5, i, target_joint_values3) == 0)
-  //   {
-  //     // RCLCPP_INFO(this->get_logger(), "%f", i);
-  //     break;
-  //   }
-  //   // RCLCPP_INFO(this->get_logger(), "%f", i);
-  //   // if(i >= 0.01)
-  //   // {
-  //   //   handle_error("Failed to calculate inverse kinematics");
-  //   //   return;
-  //   // }
+  //   handle_error("Failed to execute");
+  //   return;
   // }
 
-  // move_group_->setJointValueTarget(target_joint_values3);
+  // RCLCPP_INFO(this->get_logger(), "Move to a position 1 m higher than the target excavation position succeeded");
+
+  // // std::vector<double> target_joint_values2(joint_names_.size(), 0.0);
+  // // /*** Move to a target excavation position ***/
+  // // for (double i = 2.0; i > 0.01; i -= 0.01)
+  // // {
+  // //   if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x - offset*cos(radians), goal->position_with_angle.position.y + offset*sin(radians),
+  // //                                           goal->position_with_angle.position.z + 0.5, i, target_joint_values2) == 0)
+  // //   {
+  // //     // RCLCPP_INFO(this->get_logger(), "%f", i);
+  // //     break;
+  // //   }
+  // //   // RCLCPP_INFO(this->get_logger(), "%f", i);
+  // //   // if(i >= 0.01)
+  // //   // {
+  // //   //   handle_error("Failed to calculate inverse kinematics");
+  // //   //   return;
+  // //   // }
+  // // }
+
+  // // move_group_->setJointValueTarget(target_joint_values2);
+
+  // /*** Exacvate ***/
+  // // Get current joint values
+  // target_joint_values = move_group_->getCurrentJointValues();
+  // for (size_t i = 0; i < joint_names_.size(); i++)
+  // {
+  //   if (joint_names_[i] == "arm_joint")
+  //   {
+  //     target_joint_values[i] = target_joint_values[i] + 0.3;  // 掘削時のarmの目標角度[rad]
+  //     break;
+  //   }
+  // }
+
+  // move_group_->setJointValueTarget(target_joint_values);
 
   // // Plan
   // feedback->state = "PLANNING";
@@ -298,37 +309,77 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
   //   return;
   // }
 
-  // /*** Exacvate ***/
-  // Get current joint values
-  target_joint_values = move_group_->getCurrentJointValues();
-  for (size_t i = 0; i < joint_names_.size(); i++)
-  {
-    if (joint_names_[i] == "bucket_joint")
-    {
-      target_joint_values[i] = target_joint_values[i] + 0.8;  // 掘削時のバケットの目標角度[rad]
-      break;
-    }
-  }
+  // RCLCPP_INFO(this->get_logger(), "Move to target excavation position succeeded");
 
-  move_group_->setJointValueTarget(target_joint_values);
+  // // std::vector<double> target_joint_values3(joint_names_.size(), 0.0);
+  // // /*** Move to a target excavation position ***/
+  // // for (double i = 3.0; i > 0.01; i -= 0.01)
+  // // {
+  // //   if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x - 2.0*offset*cos(radians), goal->position_with_angle.position.y + 2.0*offset*sin(radians),
+  // //                                           goal->position_with_angle.position.z + 1.5, i, target_joint_values3) == 0)
+  // //   {
+  // //     // RCLCPP_INFO(this->get_logger(), "%f", i);
+  // //     break;
+  // //   }
+  // //   // RCLCPP_INFO(this->get_logger(), "%f", i);
+  // //   // if(i >= 0.01)
+  // //   // {
+  // //   //   handle_error("Failed to calculate inverse kinematics");
+  // //   //   return;
+  // //   // }
+  // // }
 
-  // Plan
-  feedback->state = "PLANNING";
-  goal_handle->publish_feedback(feedback);
-  if (move_group_->plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
-  {
-    handle_error("Failed to plan");
-    return;
-  }
+  // // move_group_->setJointValueTarget(target_joint_values3);
 
-  // Execute
-  feedback->state = "EXECUTING";
-  goal_handle->publish_feedback(feedback);
-  if (move_group_->execute(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
-  {
-    handle_error("Failed to execute");
-    return;
-  }
+  // // // Plan
+  // // feedback->state = "PLANNING";
+  // // goal_handle->publish_feedback(feedback);
+  // // if (move_group_->plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  // // {
+  // //   handle_error("Failed to plan");
+  // //   return;
+  // // }
+
+  // // // Execute
+  // // feedback->state = "EXECUTING";
+  // // goal_handle->publish_feedback(feedback);
+  // // if (move_group_->execute(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  // // {
+  // //   handle_error("Failed to execute");
+  // //   return;
+  // // }
+
+  // // /*** Exacvate ***/
+  // // Get current joint values
+  // target_joint_values = move_group_->getCurrentJointValues();
+  // for (size_t i = 0; i < joint_names_.size(); i++)
+  // {
+  //   if (joint_names_[i] == "bucket_joint")
+  //   {
+  //     target_joint_values[i] = target_joint_values[i] + 0.8;  // 掘削時のバケットの目標角度[rad]
+  //     break;
+  //   }
+  // }
+
+  // move_group_->setJointValueTarget(target_joint_values);
+
+  // // Plan
+  // feedback->state = "PLANNING";
+  // goal_handle->publish_feedback(feedback);
+  // if (move_group_->plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  // {
+  //   handle_error("Failed to plan");
+  //   return;
+  // }
+
+  // // Execute
+  // feedback->state = "EXECUTING";
+  // goal_handle->publish_feedback(feedback);
+  // if (move_group_->execute(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  // {
+  //   handle_error("Failed to execute");
+  //   return;
+  // }
 
   // If execution was successful, set the result of the action and mark it as succeeded.
   RCLCPP_INFO(this->get_logger(), "Goal succeeded");
