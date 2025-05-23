@@ -232,7 +232,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
   
   if (!planning_success) {
     RCLCPP_WARN(this->get_logger(), "Aborting execution due to planning failure.");
-    result->error_code.val = moveit::core::MoveItErrorCode::PLANNING_FAILED;
+    result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
     goal_handle->abort(result);
     return;
   }
@@ -241,7 +241,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
   for (const auto& plan : plans) {
     if (!move_group_->execute(plan)) {
       RCLCPP_ERROR(this->get_logger(), "Execution failed for one of the trajectories");
-      result->error_code.val = moveit::core::MoveItErrorCode::CONTROL_FAILED;
+      result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
       goal_handle->abort(result);
       return;
     }

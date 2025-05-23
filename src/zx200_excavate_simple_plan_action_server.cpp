@@ -10,7 +10,7 @@
 using namespace tms_if_for_opera;
 
 Zx200ExcavateSimpleActionServer::Zx200ExcavateSimpleActionServer(const rclcpp::NodeOptions& options)
-  : Node("tms_if_for_opera_zx200_excavate_simple", options)
+  : Node("tms_if_for_opera_zx200_excavate_simple_plan", options)
 {
   this->declare_parameter<std::string>("robot_description", "");
   this->get_parameter("robot_description", robot_description_);
@@ -34,7 +34,7 @@ Zx200ExcavateSimpleActionServer::Zx200ExcavateSimpleActionServer(const rclcpp::N
   using namespace std::placeholders;
 
   action_server_ = rclcpp_action::create_server<Zx200ExcavateSimple>(
-      this, "tms_rp_zx200_excavate_simple", std::bind(&Zx200ExcavateSimpleActionServer::handle_goal, this, _1, _2),
+      this, "tms_rp_zx200_excavate_simple_plan", std::bind(&Zx200ExcavateSimpleActionServer::handle_goal, this, _1, _2),
       std::bind(&Zx200ExcavateSimpleActionServer::handle_cancel, this, _1),
       std::bind(&Zx200ExcavateSimpleActionServer::handle_accepted, this, _1));
   /****/
@@ -181,6 +181,8 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
     if(i >= M_PI / 3.0 - 0.01)
     {
       handle_error("Failed to calculate inverse kinematics");
+      result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
+      goal_handle->abort(result);
       return;
     }
   }
@@ -232,7 +234,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
   
   if (!planning_success) {
     RCLCPP_WARN(this->get_logger(), "Aborting execution due to planning failure.");
-    result->error_code.val = moveit::core::MoveItErrorCode::PLANNING_FAILED;
+    result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
     goal_handle->abort(result);
     return;
   }
