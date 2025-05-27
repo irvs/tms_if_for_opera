@@ -181,8 +181,8 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
     if(i >= M_PI / 3.0 - 0.01)
     {
       handle_error("Failed to calculate inverse kinematics");
-      result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
-      goal_handle->abort(result);
+      // result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
+      // goal_handle->abort(result);
       return;
     }
   }
