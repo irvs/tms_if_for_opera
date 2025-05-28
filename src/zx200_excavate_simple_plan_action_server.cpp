@@ -162,8 +162,8 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
   // Clear constraints
   // move_group_->clearPathConstraints();
 
-  double radians = atan2(std::abs(goal->position_with_angle.position.y), -1.0 * goal->position_with_angle.position.x);
-  radians = M_PI - radians;
+  double radians = atan2(goal->position_with_angle.position.y, goal->position_with_angle.position.x);
+  // radians = M_PI - radians;
   double offset = 1.5;
   RCLCPP_INFO(this->get_logger(), "%f", radians);
 
@@ -173,7 +173,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
   std::vector<double> target_joint_values(joint_names_.size(), 0.0);
   for (double i = 1.5; i < M_PI; i += 0.01)
   {
-    if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x + offset*cos(radians) , goal->position_with_angle.position.y - offset*sin(radians),
+    if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x + offset*cos(radians) , goal->position_with_angle.position.y + offset*sin(radians),
                                             goal->position_with_angle.position.z - 0.5, i, target_joint_values) == 0)
     {
       break;
