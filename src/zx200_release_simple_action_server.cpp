@@ -196,8 +196,9 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
 
 
   // target_pose.orientation = tf2::toMsg(target_q);
+  target_pose.position.z += 0.1;
 
-  // 目標Poseとして設定
+  // 目標Poseとして設定s
   move_group_->setPoseTarget(target_pose, "bucket_end_link");
 
   // Set target joint values
