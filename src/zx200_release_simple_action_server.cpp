@@ -159,29 +159,52 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
   }
 
   // Constraints
-  std::string target_joint = "swing_joint";
-  auto it = std::find(joint_names_.begin(), joint_names_.end(), target_joint);
-  if (it == joint_names_.end())
-  {
-      RCLCPP_ERROR(rclcpp::get_logger("move_with_constraint"), "Joint %s not found!", target_joint.c_str());
-      return;
-  }
-  size_t joint_index = std::distance(joint_names_.begin(), it);
-  moveit_msgs::msg::Constraints constraints;
-  moveit_msgs::msg::JointConstraint joint_constraint;
-  joint_constraint.joint_name = target_joint;
-  joint_constraint.position = joint_values[joint_index];
-  joint_constraint.tolerance_above = 0.0;
-  joint_constraint.tolerance_below = 0.0;
-  joint_constraint.weight = 1.0;
-  constraints.joint_constraints.push_back(joint_constraint);
-  move_group_->setPathConstraints(constraints);
+  // std::string target_joint = "swing_joint";
+  // auto it = std::find(joint_names_.begin(), joint_names_.end(), target_joint);
+  // if (it == joint_names_.end())
+  // {
+  //     RCLCPP_ERROR(rclcpp::get_logger("move_with_constraint"), "Joint %s not found!", target_joint.c_str());
+  //     return;
+  // }
+  // size_t joint_index = std::distance(joint_names_.begin(), it);
+  // moveit_msgs::msg::Constraints constraints;
+  // moveit_msgs::msg::JointConstraint joint_constraint;
+  // joint_constraint.joint_name = target_joint;
+  // joint_constraint.position = joint_values[joint_index];
+  // joint_constraint.tolerance_above = 0.0;
+  // joint_constraint.tolerance_below = 0.0;
+  // joint_constraint.weight = 1.0;
+  // constraints.joint_constraints.push_back(joint_constraint);
+  // move_group_->setPathConstraints(constraints);
+
+  geometry_msgs::msg::PoseStamped current_pose = move_group_->getCurrentPose("bucket_end_link");
+
+  // 位置はそのまま維持
+  geometry_msgs::msg::Pose target_pose = current_pose.pose;
+
+  // tf2::Quaternion current_q;
+  // tf2::fromMsg(current_pose.pose.orientation, current_q);
+
+  // // 姿勢だけ新しいものに差し替える（例：ピッチ軸回転）
+  // tf2::Quaternion delta_q;
+  // delta_q.setRPY(0, M_PI / 6, 0);  // 例：30度バケットを返す
+  // delta_q.normalize();
+
+  // // 合成する（順序重要: delta_q * current_q）
+  // tf2::Quaternion target_q = delta_q * current_q;
+  // target_q.normalize();
+
+
+  // target_pose.orientation = tf2::toMsg(target_q);
+
+  // 目標Poseとして設定
+  move_group_->setPoseTarget(target_pose, "bucket_end_link");
 
   // Set target joint values
-  std::map<std::string, double> target_joint_values;
-  target_joint_values = current_joint_values_;
-  target_joint_values["bucket_joint"] = goal->target_angle;
-  move_group_->setJointValueTarget(target_joint_values);
+  // std::map<std::string, double> target_joint_values;
+  // target_joint_values = current_joint_values_;
+  // target_joint_values["bucket_joint"] = goal->target_angle;
+  // move_group_->setJointValueTarget(target_joint_values);
 
   // Plan
   feedback->state = "PLANNING";
@@ -223,7 +246,7 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
   }
 
   // 制約を解除
-  move_group_->clearPathConstraints();
+  // move_group_->clearPathConstraints();
 }
 
 void Zx200ReleaseSimpleActionServer::apply_collision_objects_from_db(const std::string& record_name)
