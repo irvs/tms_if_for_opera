@@ -208,46 +208,74 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
   }
   joint_targets.push_back(target_joint_values);
   
-  // 最初の状態を取得
-  moveit::core::RobotState start_state(*move_group_->getCurrentState());
-  
-  bool planning_success = true;
-  
-  for (const auto& joints : joint_targets) {
-    move_group_->setStartState(start_state);
-    move_group_->setJointValueTarget(joints);
-  
-    moveit::planning_interface::MoveGroupInterface::Plan plan;
-    if (move_group_->plan(plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS) {
-      RCLCPP_ERROR(this->get_logger(), "Failed to plan to one of the waypoints");
-      planning_success = false;
-      break;
+  while(!joint_targets.empty()){
+    // 最初の状態を取得
+    moveit::core::RobotState start_state(*move_group_->getCurrentState());
+    
+    bool planning_success = true;
+    
+    for (const auto& joints : joint_targets) {
+      move_group_->setStartState(start_state);
+      move_group_->setJointValueTarget(joints);
+    
+      moveit::planning_interface::MoveGroupInterface::Plan plan;
+      if (move_group_->plan(plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+        RCLCPP_ERROR(this->get_logger(), "Failed to plan to one of the waypoints");
+        planning_success = false;
+        break;
+      }
+    
+      plans.push_back(plan);  // 成功したら保持
+    
+      // 次の出発点を更新（まだexecuteしてないけど、stateは変える）
+      start_state.setJointGroupPositions(
+        move_group_->getRobotModel()->getJointModelGroup(move_group_->getName()), joints);
+      start_state.update();
     }
-  
-    plans.push_back(plan);  // 成功したら保持
-  
-    // 次の出発点を更新（まだexecuteしてないけど、stateは変える）
-    start_state.setJointGroupPositions(
-      move_group_->getRobotModel()->getJointModelGroup(move_group_->getName()), joints);
-    start_state.update();
-  }
-  
-  if (!planning_success) {
-    RCLCPP_WARN(this->get_logger(), "Aborting execution due to planning failure.");
-    result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
-    goal_handle->abort(result);
-    return;
-  }
-  
-  // 成功した場合、順番に実行
-  for (const auto& plan : plans) {
-    if (!move_group_->execute(plan)) {
-      RCLCPP_ERROR(this->get_logger(), "Execution failed for one of the trajectories");
+    
+    if (!planning_success) {
+      RCLCPP_WARN(this->get_logger(), "Aborting execution due to planning failure.");
       result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
       goal_handle->abort(result);
       return;
     }
+    
+    bool all_success = true;
+    // 成功した場合、順番に実行
+    for (const auto& plan : plans) {
+      moveit::core::MoveItErrorCode exec_result = move_group_->execute(plan);
+    
+      if (exec_result == moveit::core::MoveItErrorCode::SUCCESS) {
+        continue;  // 正常に完了
+      } else if (exec_result == moveit::core::MoveItErrorCode::CONTROL_FAILED) {
+        RCLCPP_WARN(this->get_logger(), "Execution timed out, but continuing to next trajectory...");
+        joint_targets.erase(joint_targets.begin());
+        plans.clear();  // 前のプランは破棄
+        all_success = false;
+        break;  // タイムアウトだが無視して次へ
+      } else {
+        RCLCPP_ERROR(this->get_logger(), "Execution failed with error code: %d", exec_result.val);
+        result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
+        goal_handle->abort(result);
+        return;
+      }
+    }
+
+    if (all_success) {
+      RCLCPP_INFO(this->get_logger(), "All trajectories executed successfully.");
+      result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::SUCCEEDED);
+      goal_handle->succeed(result);
+      return;
+    }
   }
+
+  RCLCPP_INFO(this->get_logger(), "All trajectories executed successfully.");
+  result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::SUCCEEDED);
+  goal_handle->succeed(result);
+
+  // RCLCPP_INFO(this->get_logger(), "Goal succeeded");
+  // result->error_code.val = 1;
+  // goal_handle->succeed(result);
 
   // // Execute
   // feedback->state = "EXECUTING";
@@ -385,9 +413,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
   // }
 
   // If execution was successful, set the result of the action and mark it as succeeded.
-  RCLCPP_INFO(this->get_logger(), "Goal succeeded");
-  result->error_code.val = 1;
-  goal_handle->succeed(result);
+
 }
 
 void Zx200ExcavateSimpleActionServer::apply_collision_objects_from_db(const std::string& record_name)
