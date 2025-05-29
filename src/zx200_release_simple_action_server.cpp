@@ -197,7 +197,11 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
   position_constraint.constraint_region.primitives[0].dimensions = {10.0, 10.0, 100.0};
 
   geometry_msgs::msg::PoseStamped current_pose = move_group_->getCurrentPose("bucket_end_link");
-  current_pose.header.frame_id = "base_link";
+  RCLCPP_INFO(this->get_logger(), "current_pose.pose.position = [x: %f, y: %f, z: %f]",
+  current_pose.pose.position.x,
+  current_pose.pose.position.y,
+  current_pose.pose.position.z);
+  // current_pose.header.frame_id = "base_link";
   position_constraint.constraint_region.primitive_poses.push_back(current_pose.pose);
   position_constraint.header.frame_id = "base_link";
   position_constraint.weight = 1.0;
@@ -235,21 +239,22 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
   // target_joint_values = current_joint_values_;
   target_joint_values["bucket_joint"] = goal->target_angle;
   // target_joint_values["bucket_joint"] = current_joint_values_["bucket_joint"] - 0.1;
+  target_joint_values["swing_joint"] = current_joint_values_["swing_joint"];
   move_group_->setJointValueTarget(target_joint_values);
 
-  // 1. 関節値をセットする RobotState を用意
-  moveit::core::RobotStatePtr state(new moveit::core::RobotState(move_group_->getRobotModel()));
-  state->setToDefaultValues();  // 初期化
+  // // 1. 関節値をセットする RobotState を用意
+  // moveit::core::RobotStatePtr state(new moveit::core::RobotState(move_group_->getRobotModel()));
+  // state->setToDefaultValues();  // 初期化
 
-  // 2. target_joint_values を RobotState に反映
-  for (const auto& joint : target_joint_values) {
-    state->setJointPositions(joint.first, &joint.second);
-  }
+  // // 2. target_joint_values を RobotState に反映
+  // for (const auto& joint : target_joint_values) {
+  //   state->setJointPositions(joint.first, &joint.second);
+  // }
 
-  const moveit::core::JointModelGroup* joint_model_group = state->getJointModelGroup("manipulator");
-  geometry_msgs::msg::Pose target_pose;
-  Eigen::Isometry3d pose_eigen = state->getGlobalLinkTransform("bucket_end_link");
-  target_pose = tf2::toMsg(pose_eigen);
+  // const moveit::core::JointModelGroup* joint_model_group = state->getJointModelGroup("manipulator");
+  // geometry_msgs::msg::Pose target_pose;
+  // Eigen::Isometry3d pose_eigen = state->getGlobalLinkTransform("bucket_end_link");
+  // target_pose = tf2::toMsg(pose_eigen);
   
   // 4. setPoseTarget に渡す
   // move_group_->setPoseTarget(target_pose, "bucket_end_link");
