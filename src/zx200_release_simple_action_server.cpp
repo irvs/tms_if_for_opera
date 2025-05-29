@@ -194,7 +194,7 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
   position_constraint.target_point_offset.z = 0.0;
   position_constraint.constraint_region.primitives.resize(1);
   position_constraint.constraint_region.primitives[0].type = shape_msgs::msg::SolidPrimitive::BOX;
-  position_constraint.constraint_region.primitives[0].dimensions = {3, 3, 3};
+  position_constraint.constraint_region.primitives[0].dimensions = {10.0, 10.0, 100.0};
 
   geometry_msgs::msg::PoseStamped current_pose = move_group_->getCurrentPose("bucket_end_link");
   current_pose.header.frame_id = "base_link";
@@ -234,6 +234,7 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
   std::map<std::string, double> target_joint_values;
   // target_joint_values = current_joint_values_;
   target_joint_values["bucket_joint"] = goal->target_angle;
+  // target_joint_values["bucket_joint"] = current_joint_values_["bucket_joint"] - 0.1;
   move_group_->setJointValueTarget(target_joint_values);
 
   // 1. 関節値をセットする RobotState を用意
