@@ -4,6 +4,8 @@
 // #include <moveit_msgs/msg/orientation_constraint.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <moveit/robot_state/robot_state.h>
+#include <tf2_eigen/tf2_eigen.h>
 
 using namespace tms_if_for_opera;
 
@@ -177,11 +179,32 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
   // constraints.joint_constraints.push_back(joint_constraint);
   // move_group_->setPathConstraints(constraints);
 
+  // geometry_msgs::msg::PoseStamped current_pose = move_group_->getCurrentPose("bucket_end_link");
+
+  // // 位置はそのまま維持
+  // geometry_msgs::msg::Pose target_pose = current_pose.pose;
+
+  moveit_msgs::msg::Constraints constraints;
+
+  // --- エンドエフェクタの位置・姿勢制約 ---
+  moveit_msgs::msg::PositionConstraint position_constraint;
+  position_constraint.link_name = "bucket_end_link";
+  position_constraint.target_point_offset.x = 0.0;
+  position_constraint.target_point_offset.y = 0.0;
+  position_constraint.target_point_offset.z = 0.0;
+  position_constraint.constraint_region.primitives.resize(1);
+  position_constraint.constraint_region.primitives[0].type = shape_msgs::msg::SolidPrimitive::BOX;
+  position_constraint.constraint_region.primitives[0].dimensions = {3, 3, 3};
+
   geometry_msgs::msg::PoseStamped current_pose = move_group_->getCurrentPose("bucket_end_link");
+  current_pose.header.frame_id = "base_link";
+  position_constraint.constraint_region.primitive_poses.push_back(current_pose.pose);
+  position_constraint.header.frame_id = "base_link";
+  position_constraint.weight = 1.0;
 
-  // 位置はそのまま維持
-  geometry_msgs::msg::Pose target_pose = current_pose.pose;
+  constraints.position_constraints.push_back(position_constraint);
 
+  move_group_->setPathConstraints(constraints);
   // tf2::Quaternion current_q;
   // tf2::fromMsg(current_pose.pose.orientation, current_q);
 
@@ -196,16 +219,39 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
 
 
   // target_pose.orientation = tf2::toMsg(target_q);
-  target_pose.position.z += 0.1;
+  // target_pose.position.z += 0.1;
+
+  // std::vector<double> current_joints = move_group_->getCurrentJointValues();
+  // current_joints[4] += M_PI / 6;  // 30度
+
+  // move_group_->setJointValueTarget(current_joints);
+  // move_group_->setPoseTarget(current_pose, "bucket_end_link");  // エンドエフェクタの位置維持
 
   // 目標Poseとして設定s
-  move_group_->setPoseTarget(target_pose, "bucket_end_link");
+  // move_group_->setPoseTarget(target_pose, "bucket_end_link");
 
   // Set target joint values
-  // std::map<std::string, double> target_joint_values;
+  std::map<std::string, double> target_joint_values;
   // target_joint_values = current_joint_values_;
-  // target_joint_values["bucket_joint"] = goal->target_angle;
-  // move_group_->setJointValueTarget(target_joint_values);
+  target_joint_values["bucket_joint"] = goal->target_angle;
+  move_group_->setJointValueTarget(target_joint_values);
+
+  // 1. 関節値をセットする RobotState を用意
+  moveit::core::RobotStatePtr state(new moveit::core::RobotState(move_group_->getRobotModel()));
+  state->setToDefaultValues();  // 初期化
+
+  // 2. target_joint_values を RobotState に反映
+  for (const auto& joint : target_joint_values) {
+    state->setJointPositions(joint.first, &joint.second);
+  }
+
+  const moveit::core::JointModelGroup* joint_model_group = state->getJointModelGroup("manipulator");
+  geometry_msgs::msg::Pose target_pose;
+  Eigen::Isometry3d pose_eigen = state->getGlobalLinkTransform("bucket_end_link");
+  target_pose = tf2::toMsg(pose_eigen);
+  
+  // 4. setPoseTarget に渡す
+  // move_group_->setPoseTarget(target_pose, "bucket_end_link");
 
   // Plan
   feedback->state = "PLANNING";
@@ -247,7 +293,7 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
   }
 
   // 制約を解除
-  // move_group_->clearPathConstraints();
+  move_group_->clearPathConstraints();
 }
 
 void Zx200ReleaseSimpleActionServer::apply_collision_objects_from_db(const std::string& record_name)
