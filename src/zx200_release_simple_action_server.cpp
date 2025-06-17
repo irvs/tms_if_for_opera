@@ -184,6 +184,46 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
   // // 位置はそのまま維持
   // geometry_msgs::msg::Pose target_pose = current_pose.pose;
 
+  // std::map<std::string, double> target_joint_values1;
+  // // target_joint_values = current_joint_values_;
+  // target_joint_values1["bucket_joint"] = 0.9;
+  // // target_joint_values["bucket_joint"] = current_joint_values_["bucket_joint"] - 0.1;
+  // target_joint_values1["swing_joint"] = current_joint_values_["swing_joint"];
+  // move_group_->setJointValueTarget(target_joint_values1);
+
+  // feedback->state = "PLANNING";
+  // goal_handle->publish_feedback(feedback);
+  // moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+  // if (move_group_->plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  // {
+  //   feedback->state = "ABORTED";
+  //   goal_handle->publish_feedback(feedback);
+  //   result->error_code.val = 9999;
+  // }
+
+  // // Execute
+  // feedback->state = "EXECUTING";
+  // goal_handle->publish_feedback(feedback);
+  // if (move_group_->execute(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  // {
+  //   feedback->state = "SUCCEEDED";
+  //   goal_handle->publish_feedback(feedback);
+  //   result->error_code.val = 1;
+  // }
+  // else
+  // {
+  //   feedback->state = "ABORTED";
+  //   goal_handle->publish_feedback(feedback);
+  //   result->error_code.val = 9999;
+  // }
+
+  // std::vector<double> joint_values = move_group_->getCurrentJointValues();
+  // for (size_t i = 0; i < joint_names_.size() && i < joint_values.size(); i++)
+  // {
+  //   current_joint_values_[joint_names_[i]] = joint_values[i];
+  //   // target_joint_values_[joint_names_[i]] = joint_values[i];
+  // }
+
   moveit_msgs::msg::Constraints constraints;
 
   // --- エンドエフェクタの位置・姿勢制約 ---
@@ -194,7 +234,7 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
   position_constraint.target_point_offset.z = 0.0;
   position_constraint.constraint_region.primitives.resize(1);
   position_constraint.constraint_region.primitives[0].type = shape_msgs::msg::SolidPrimitive::BOX;
-  position_constraint.constraint_region.primitives[0].dimensions = {10.0, 10.0, 100.0};
+  position_constraint.constraint_region.primitives[0].dimensions = {10.0, 10.0, 10.0};
 
   geometry_msgs::msg::PoseStamped current_pose = move_group_->getCurrentPose("bucket_end_link");
   RCLCPP_INFO(this->get_logger(), "current_pose.pose.position = [x: %f, y: %f, z: %f]",
