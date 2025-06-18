@@ -171,8 +171,8 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
   moveit_msgs::msg::JointConstraint joint_constraint;
   joint_constraint.joint_name = target_joint;
   joint_constraint.position = joint_values[joint_index];
-  joint_constraint.tolerance_above = 0.0;
-  joint_constraint.tolerance_below = 0.0;
+  joint_constraint.tolerance_above = 0.1;
+  joint_constraint.tolerance_below = 0.1;
   joint_constraint.weight = 1.0;
   constraints.joint_constraints.push_back(joint_constraint);
   move_group_->setPathConstraints(constraints);
@@ -194,20 +194,23 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
     result->error_code.val = 9999;
   }
 
-  // Execute
-  feedback->state = "EXECUTING";
-  goal_handle->publish_feedback(feedback);
-  if (move_group_->execute(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  if (result->error_code.val != 9999)
   {
-    feedback->state = "SUCCEEDED";
+    // Execute
+    feedback->state = "EXECUTING";
     goal_handle->publish_feedback(feedback);
-    result->error_code.val = 1;
-  }
-  else
-  {
-    feedback->state = "ABORTED";
-    goal_handle->publish_feedback(feedback);
-    result->error_code.val = 9999;
+    if (move_group_->execute(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS)
+    {
+      feedback->state = "SUCCEEDED";
+      goal_handle->publish_feedback(feedback);
+      result->error_code.val = 1;
+    }
+    else
+    {
+      feedback->state = "ABORTED";
+      goal_handle->publish_feedback(feedback);
+      result->error_code.val = 9999;
+    }
   }
 
   // If execution was successful, set the result of the action and mark it as succeeded.
