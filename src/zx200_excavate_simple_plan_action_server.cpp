@@ -164,7 +164,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
 
   double radians = atan2(goal->position_with_angle.position.y, goal->position_with_angle.position.x);
   // radians = M_PI - radians;
-  double offset = 1.5;
+  double offset = goal->position_with_angle.offset;
   RCLCPP_INFO(this->get_logger(), "%f", radians);
 
 
@@ -189,6 +189,17 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
 
   std::vector<moveit::planning_interface::MoveGroupInterface::Plan> plans;
   std::vector<std::vector<double>> joint_targets;
+
+  // Swingだけ先に動かす
+  std::vector<double> swing_joint_values(joint_names_.size(), 0.0);
+  swing_joint_values = move_group_->getCurrentJointValues();
+  for (size_t i = 0; i < joint_names_.size(); i++) {
+    if (joint_names_[i] == "swing_joint") {
+      swing_joint_values[i] = target_joint_values[i];
+    }
+  }
+
+  joint_targets.push_back(swing_joint_values);
   
   joint_targets.push_back(target_joint_values);
   

@@ -5,6 +5,8 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <moveit/robot_state/robot_state.h>
+#include <moveit/robot_trajectory/robot_trajectory.h>       
+#include <moveit/trajectory_processing/iterative_time_parameterization.h>
 
 
 using namespace tms_if_for_opera;
@@ -164,7 +166,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
 
   double radians = atan2(goal->position_with_angle.position.y, goal->position_with_angle.position.x);
   // radians = M_PI - radians;
-  double offset = 1.5;
+  double offset = goal->position_with_angle.offset;
   RCLCPP_INFO(this->get_logger(), "%f", radians);
 
 
@@ -189,6 +191,17 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
 
   std::vector<moveit::planning_interface::MoveGroupInterface::Plan> plans;
   std::vector<std::vector<double>> joint_targets;
+
+  // Swingだけ先に動かす
+  std::vector<double> swing_joint_values(joint_names_.size(), 0.0);
+  swing_joint_values = move_group_->getCurrentJointValues();
+  for (size_t i = 0; i < joint_names_.size(); i++) {
+    if (joint_names_[i] == "swing_joint") {
+      swing_joint_values[i] = target_joint_values[i];
+    }
+  }
+
+  joint_targets.push_back(swing_joint_values);
   
   joint_targets.push_back(target_joint_values);
   
@@ -208,7 +221,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
   }
   joint_targets.push_back(target_joint_values);
   
-  while(!joint_targets.empty()){
+  // while(!joint_targets.empty()){
     // 最初の状態を取得
     moveit::core::RobotState start_state(*move_group_->getCurrentState());
     
@@ -239,39 +252,79 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
       goal_handle->abort(result);
       return;
     }
-    
-    bool all_success = true;
-    // 成功した場合、順番に実行
-    for (const auto& plan : plans) {
-      moveit::core::MoveItErrorCode exec_result = move_group_->execute(plan);
-    
-      if (exec_result == moveit::core::MoveItErrorCode::SUCCESS) {
-        continue;  // 正常に完了
-      } else if (exec_result == moveit::core::MoveItErrorCode::CONTROL_FAILED) {
-        RCLCPP_WARN(this->get_logger(), "Execution timed out, but continuing to next trajectory...");
-        joint_targets.erase(joint_targets.begin());
-        plans.clear();  // 前のプランは破棄
-        all_success = false;
-        break;  // タイムアウトだが無視して次へ
-      } else {
-        RCLCPP_ERROR(this->get_logger(), "Execution failed with error code: %d", exec_result.val);
-        result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
-        goal_handle->abort(result);
-        return;
-      }
-    }
 
-    if (all_success) {
-      RCLCPP_INFO(this->get_logger(), "All trajectories executed successfully.");
-      result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::SUCCEEDED);
+    // まず空のRobotTrajectoryを作る
+    robot_trajectory::RobotTrajectory full_traj(move_group_->getRobotModel(), move_group_->getName());
+
+    // 各planのtrajectoryをappend
+    for (const auto& plan : plans) {
+      // plan.trajectory_ は moveit_msgs::msg::RobotTrajectory 型
+      robot_trajectory::RobotTrajectory part_traj(move_group_->getRobotModel(), move_group_->getName());
+      part_traj.setRobotTrajectoryMsg(*move_group_->getCurrentState(), plan.trajectory_);
+
+      // append: (traj, 時間オフセット)
+      full_traj.append(part_traj, 0.0); // 0.0なら連続して連結
+    }
+    trajectory_processing::IterativeParabolicTimeParameterization iptp;
+    iptp.computeTimeStamps(full_traj);
+
+    moveit::planning_interface::MoveGroupInterface::Plan full_plan;
+    full_traj.getRobotTrajectoryMsg(full_plan.trajectory_);
+
+    // Execute
+    feedback->state = "EXECUTING";
+    goal_handle->publish_feedback(feedback);
+    if (move_group_->execute(full_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+    {
+      handle_error("Failed to execute");
+      return;
+    }else if (move_group_->execute(full_plan) == moveit::planning_interface::MoveItErrorCode::CONTROL_FAILED)
+    {
+      RCLCPP_WARN(this->get_logger(), "Execution timed out, but continuing to next trajectory...");
+      result->error_code.val = 1;
+      goal_handle->succeed(result);
+      return;
+    } else {
+      RCLCPP_INFO(this->get_logger(), "Trajectory executed successfully.");
+      result->error_code.val = 1;
       goal_handle->succeed(result);
       return;
     }
-  }
 
-  RCLCPP_INFO(this->get_logger(), "All trajectories executed successfully.");
-  result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::SUCCEEDED);
-  goal_handle->succeed(result);
+    
+    
+    // bool all_success = true;
+    // // 成功した場合、順番に実行
+    // for (const auto& plan : plans) {
+    //   moveit::core::MoveItErrorCode exec_result = move_group_->execute(plan);
+    
+    //   if (exec_result == moveit::core::MoveItErrorCode::SUCCESS) {
+    //     continue;  // 正常に完了
+    //   } else if (exec_result == moveit::core::MoveItErrorCode::CONTROL_FAILED) {
+    //     RCLCPP_WARN(this->get_logger(), "Execution timed out, but continuing to next trajectory...");
+    //     joint_targets.erase(joint_targets.begin());
+    //     plans.clear();  // 前のプランは破棄
+    //     all_success = false;
+    //     break;  // タイムアウト
+    //   } else {
+    //     RCLCPP_ERROR(this->get_logger(), "Execution failed with error code: %d", exec_result.val);
+    //     result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
+    //     goal_handle->abort(result);
+    //     return;
+    //   }
+    // }
+
+    // if (all_success) {
+    //   RCLCPP_INFO(this->get_logger(), "All trajectories executed successfully.");
+    //   result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::SUCCEEDED);
+    //   goal_handle->succeed(result);
+    //   return;
+    // }
+  // }
+
+  // RCLCPP_INFO(this->get_logger(), "Failed to executes");
+  // result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
+  // goal_handle->abort(result);
 
   // RCLCPP_INFO(this->get_logger(), "Goal succeeded");
   // result->error_code.val = 1;
