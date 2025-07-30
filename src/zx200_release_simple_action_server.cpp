@@ -171,8 +171,8 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
   moveit_msgs::msg::JointConstraint joint_constraint;
   joint_constraint.joint_name = target_joint;
   joint_constraint.position = joint_values[joint_index];
-  joint_constraint.tolerance_above = 0.0;
-  joint_constraint.tolerance_below = 0.0;
+  joint_constraint.tolerance_above = 0.1;
+  joint_constraint.tolerance_below = 0.1;
   joint_constraint.weight = 1.0;
   constraints.joint_constraints.push_back(joint_constraint);
   move_group_->setPathConstraints(constraints);

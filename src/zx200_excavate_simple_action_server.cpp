@@ -169,12 +169,14 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
 
 
   const double step = 0.01;
-  const double theta_w = goal->position_with_angle.theta_w;
+  // const double theta_w = goal->position_with_angle.theta_w;
+  const double theta_w = 0.0;
   const double theta_min = 0.0;
   const double theta_max = M_PI;
   std::vector<double> target_joint_values(joint_names_.size(), 0.0);
 
   bool found = false;
+  // double theta_offset = 0.1;
   double best_theta = theta_w;
 
   for (double delta = 0.0; delta <= theta_max; delta += step) {
@@ -184,7 +186,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
           if (excavator_ik_.inverseKinematics4Dof(
                   goal->position_with_angle.position.x + offset*cos(radians),
                   goal->position_with_angle.position.y + offset*sin(radians),
-                  goal->position_with_angle.position.z,
+                  goal->position_with_angle.position.z - 0.3,
                   cand1,
                   target_joint_values) == 0)
           {
@@ -194,20 +196,20 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
           }
       }
       // 2) θw - Δ を試す
-      double cand2 = theta_w - delta;
-      if (delta > 0.0 && cand2 >= theta_min) {
-          if (excavator_ik_.inverseKinematics4Dof(
-                  goal->position_with_angle.position.x + offset*cos(radians),
-                  goal->position_with_angle.position.y + offset*sin(radians),
-                  goal->position_with_angle.position.z,
-                  cand2,
-                  target_joint_values) == 0)
-          {
-              best_theta = cand2;
-              found = true;
-              break;
-          }
-      }
+      // double cand2 = theta_w - delta;
+      // if (delta > 0.0 && cand2 >= theta_min) {
+      //     if (excavator_ik_.inverseKinematics4Dof(
+      //             goal->position_with_angle.position.x + offset*cos(radians),
+      //             goal->position_with_angle.position.y + offset*sin(radians),
+      //             goal->position_with_angle.position.z - 0.3,
+      //             cand2,
+      //             target_joint_values) == 0)
+      //     {
+      //         best_theta = cand2;
+      //         found = true;
+      //         break;
+      //     }
+      // }
   }
 
   if (found) {
