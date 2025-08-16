@@ -36,7 +36,7 @@ def generate_launch_description():
     declare_collision_object_dump_record_name_arg = DeclareLaunchArgument(
         'collision_object_dump_record_name',
         default_value='',
-        description='The collision object ic120 record name')
+        description='The collision object dump record names as comma-separated string (e.g., "record1,record2")')
 
     # Use xacro package to convert xacro file to URDF
     robot_description_content = Command(['xacro ', LaunchConfiguration('robot_description')])
