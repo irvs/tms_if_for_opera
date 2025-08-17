@@ -38,6 +38,11 @@ def generate_launch_description():
         default_value='',
         description='The collision object dump record names as comma-separated string (e.g., "record1,record2")')
 
+    declare_other_robots_config_arg = DeclareLaunchArgument(
+        'other_robots_config',
+        default_value='',
+        description='Other robots configuration for collision detection as comma-separated string (e.g., "mst110cr,robot2")')
+
     # Use xacro package to convert xacro file to URDF
     robot_description_content = Command(['xacro ', LaunchConfiguration('robot_description')])
 
@@ -51,6 +56,7 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
+            {'other_robots_config': LaunchConfiguration('other_robots_config')},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
     zx200_excavate_simple_action_server_node = Node(
@@ -62,6 +68,7 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
+            {'other_robots_config': LaunchConfiguration('other_robots_config')},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
     zx200_excavate_simple_plan_action_server_node = Node(
@@ -73,6 +80,7 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
+            {'other_robots_config': LaunchConfiguration('other_robots_config')},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
     zx200_release_simple_action_server_node = Node(
@@ -84,6 +92,7 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
+            {'other_robots_config': LaunchConfiguration('other_robots_config')},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
     
@@ -103,6 +112,7 @@ def generate_launch_description():
         declare_planning_group_arg,
         declare_collision_object_record_name_arg,
         declare_collision_object_dump_record_name_arg,
+        declare_other_robots_config_arg,
         
         zx200_change_pose_action_server_node,
         zx200_excavate_simple_action_server_node,
