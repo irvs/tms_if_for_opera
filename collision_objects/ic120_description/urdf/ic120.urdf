@@ -16,6 +16,11 @@
         <mesh filename="package://ic120_description/meshes/ic120-body.dae"/>
       </geometry>
     </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://ic120_description/meshes/ic120-body.dae"/>
+      </geometry>
+    </collision>
     <inertial>
       <origin rpy="0 0 0" xyz="0.8963 0.1313 1.35"/>
       <mass value="0.1"/>
@@ -52,6 +57,11 @@
         <mesh filename="package://ic120_description/meshes/ic120-vessel.dae"/>
       </geometry>
     </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://ic120_description/meshes/ic120-vessel.dae"/>
+      </geometry>
+    </collision>
     <inertial>
       <origin rpy="0 0 0" xyz="1.978 0.0181 0.773"/>
       <mass value="0.1"/>
@@ -72,6 +82,11 @@
         <mesh filename="package://ic120_description/meshes/ic120-cylinder1.dae"/>
       </geometry>
     </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://ic120_description/meshes/ic120-cylinder1.dae"/>
+      </geometry>
+    </collision>
     <inertial>
       <origin rpy="0 0 0" xyz="-0.4842 0 0.1667"/>
       <mass value="0.03"/>
@@ -93,6 +108,11 @@
         <mesh filename="package://ic120_description/meshes/ic120-cylinder2.dae"/>
       </geometry>
     </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://ic120_description/meshes/ic120-cylinder2.dae"/>
+      </geometry>
+    </collision>
     <inertial>
       <origin rpy="0 0 0" xyz="-0.8807 0 0.3033"/>
       <mass value="0.03"/>
