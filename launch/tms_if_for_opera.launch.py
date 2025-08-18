@@ -59,6 +59,18 @@ def generate_launch_description():
             {'other_robots_config': LaunchConfiguration('other_robots_config')},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
+    zx200_change_pose_plan_action_server_node = Node(
+        package='tms_if_for_opera',
+        executable='zx200_change_pose_plan_action_server',
+        namespace='zx200',
+        parameters=[
+            {'robot_description': robot_description_content},
+            {'planning_group': LaunchConfiguration('planning_group')},
+            {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
+            {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
+            {'other_robots_config': LaunchConfiguration('other_robots_config')},
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}
+        ])
     zx200_excavate_simple_action_server_node = Node(
         package='tms_if_for_opera',
         executable='zx200_excavate_simple_action_server',
@@ -115,6 +127,7 @@ def generate_launch_description():
         declare_other_robots_config_arg,
         
         zx200_change_pose_action_server_node,
+        zx200_change_pose_plan_action_server_node,
         zx200_excavate_simple_action_server_node,
         zx200_excavate_simple_plan_action_server_node,
         zx200_release_simple_action_server_node,
