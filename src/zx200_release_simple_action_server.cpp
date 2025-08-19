@@ -239,38 +239,139 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
   constraints.joint_constraints.push_back(joint_constraint);
   move_group_->setPathConstraints(constraints);
 
-  // Set target joint values
-  std::map<std::string, double> target_joint_values;
-  target_joint_values = current_joint_values_;
-  target_joint_values["bucket_joint"] = goal->target_angle;
-  move_group_->setJointValueTarget(target_joint_values);
+  std::vector<moveit::planning_interface::MoveGroupInterface::Plan> plans;
+  std::vector<std::vector<double>> joint_targets;
 
-  // Plan
-  feedback->state = "PLANNING";
-  goal_handle->publish_feedback(feedback);
-  moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-  if (move_group_->plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
-  {
-    feedback->state = "ABORTED";
-    goal_handle->publish_feedback(feedback);
-    result->error_code.val = 9999;
+  // Set target joint values
+  std::vector<double> target_joint_values(joint_names_.size(), 0.0);
+  for (size_t i = 0; i < joint_names_.size(); i++) {
+    target_joint_values[i] = current_joint_values_[joint_names_[i]];
   }
+
+  for (size_t i = 0; i < joint_names_.size(); i++) {
+    if (joint_names_[i] == "bucket_joint") {
+      target_joint_values[i] = (joint_values[i] - 0.34) / 2.0;  // バケットの目標角度を設定1
+    }
+  }
+
+  joint_targets.push_back(target_joint_values);
+
+  for (size_t i = 0; i < joint_names_.size(); i++) {
+    if (joint_names_[i] == "arm_joint") {
+      target_joint_values[i] += 0.1;
+    } else if (joint_names_[i] == "bucket_joint") {
+      target_joint_values[i] = -0.34;
+    } else if (joint_names_[i] == "boom_joint") {
+      target_joint_values[i] -= 0.15;  // boom_joint の目標角度を調整
+    }
+  }
+  joint_targets.push_back(target_joint_values);
+
+  moveit::core::RobotState start_state(*move_group_->getCurrentState());
+    
+  bool planning_success = true;
+  
+  for (const auto& joints : joint_targets) {
+    move_group_->setStartState(start_state);
+    move_group_->setJointValueTarget(joints);
+  
+    moveit::planning_interface::MoveGroupInterface::Plan plan;
+    if (move_group_->plan(plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+      RCLCPP_ERROR(this->get_logger(), "Failed to plan to one of the waypoints");
+      planning_success = false;
+      break;
+    }
+  
+    plans.push_back(plan);  // 成功したら保持
+  
+    // 次の出発点を更新（まだexecuteしてないけど、stateは変える）
+    start_state.setJointGroupPositions(
+      move_group_->getRobotModel()->getJointModelGroup(move_group_->getName()), joints);
+    start_state.update();
+  }
+  
+  if (!planning_success) {
+    RCLCPP_WARN(this->get_logger(), "Aborting execution due to planning failure.");
+    result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
+    goal_handle->abort(result);
+    return;
+  }
+
+  // // まず空のRobotTrajectoryを作る
+  // robot_trajectory::RobotTrajectory full_traj(move_group_->getRobotModel(), move_group_->getName());
+
+  // // 各planのtrajectoryをappend
+  // for (const auto& plan : plans) {
+  //   // plan.trajectory_ は moveit_msgs::msg::RobotTrajectory 型
+  //   robot_trajectory::RobotTrajectory part_traj(move_group_->getRobotModel(), move_group_->getName());
+  //   part_traj.setRobotTrajectoryMsg(*move_group_->getCurrentState(), plan.trajectory_);
+
+  //   // append: (traj, 時間オフセット)
+  //   full_traj.append(part_traj, 0.0); // 0.0なら連続して連結
+  // }
+  // trajectory_processing::IterativeParabolicTimeParameterization iptp;
+  // iptp.computeTimeStamps(full_traj);
+
+  // moveit::planning_interface::MoveGroupInterface::Plan full_plan;
+  // full_traj.getRobotTrajectoryMsg(full_plan.trajectory_);
+
+
 
   // Execute
-  feedback->state = "EXECUTING";
-  goal_handle->publish_feedback(feedback);
-  if (move_group_->execute(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS)
-  {
-    feedback->state = "SUCCEEDED";
-    goal_handle->publish_feedback(feedback);
-    result->error_code.val = 1;
+  bool all_success = true;
+  // 成功した場合、順番に実行
+  for (const auto& plan : plans) {
+    moveit::core::MoveItErrorCode exec_result = move_group_->execute(plan);
+  
+    if (exec_result == moveit::core::MoveItErrorCode::SUCCESS) {
+      continue;  // 正常に完了
+    } else {
+      RCLCPP_ERROR(this->get_logger(), "Execution failed with error code: %d", exec_result.val);
+      result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
+      goal_handle->abort(result);
+      return;
+    }
   }
-  else
-  {
-    feedback->state = "ABORTED";
-    goal_handle->publish_feedback(feedback);
-    result->error_code.val = 9999;
+
+  if (all_success) {
+    RCLCPP_INFO(this->get_logger(), "All trajectories executed successfully.");
+    result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::SUCCEEDED);
+    goal_handle->succeed(result);
+    return;
   }
+
+  // Set target joint values
+  // std::map<std::string, double> target_joint_values;
+  // target_joint_values = current_joint_values_;
+  // target_joint_values["bucket_joint"] = goal->target_angle;
+  // move_group_->setJointValueTarget(target_joint_values);
+
+  // // Plan
+  // feedback->state = "PLANNING";
+  // goal_handle->publish_feedback(feedback);
+  // moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+  // if (move_group_->plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  // {
+  //   feedback->state = "ABORTED";
+  //   goal_handle->publish_feedback(feedback);
+  //   result->error_code.val = 9999;
+  // }
+
+  // // Execute
+  // feedback->state = "EXECUTING";
+  // goal_handle->publish_feedback(feedback);
+  // if (move_group_->execute(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  // {
+  //   feedback->state = "SUCCEEDED";
+  //   goal_handle->publish_feedback(feedback);
+  //   result->error_code.val = 1;
+  // }
+  // else
+  // {
+  //   feedback->state = "ABORTED";
+  //   goal_handle->publish_feedback(feedback);
+  //   result->error_code.val = 9999;
+  // }
 
   // If execution was successful, set the result of the action and mark it as succeeded.
   if (result->error_code.val == 1)
