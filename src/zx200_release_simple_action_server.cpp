@@ -106,19 +106,30 @@ Zx200ReleaseSimpleActionServer::Zx200ReleaseSimpleActionServer(const rclcpp::Nod
   std::string collision_objects_base_path;
   this->get_parameter("collision_objects_base_path", collision_objects_base_path);
 
-  // 複数ロボットの設定を解析
+  // 複数ロボットの設定を解析 (例: "mst110cr_1,mst110cr_2,excavator")
   if (!other_robots_config_str.empty()) {
     std::stringstream ss(other_robots_config_str);
     std::string robot_name;
     while (std::getline(ss, robot_name, ',')) {
+      // 前後の空白を削除
       robot_name.erase(0, robot_name.find_first_not_of(" \t"));
       robot_name.erase(robot_name.find_last_not_of(" \t") + 1);
       
       if (!robot_name.empty()) {
-        if (load_urdf_from_file(robot_name)) {
-          RCLCPP_INFO(this->get_logger(), "Loaded URDF for robot %s", robot_name.c_str());
+        // robot_typeを抽出（_より前の部分）
+        std::string robot_type = robot_name;
+        size_t underscore_pos = robot_name.find('_');
+        if (underscore_pos != std::string::npos) {
+          robot_type = robot_name.substr(0, underscore_pos);
+        }
+        
+        // URDFファイルを読み込み（robot_typeを使用）
+        if (load_urdf_from_file(robot_type)) {
+          // robot_nameをキーとして保存（TF取得時に使用）
+          other_robot_descriptions_[robot_name] = other_robot_descriptions_[robot_type];
+          RCLCPP_INFO(this->get_logger(), "Loaded URDF for robot %s (type: %s)", robot_name.c_str(), robot_type.c_str());
         } else {
-          RCLCPP_WARN(this->get_logger(), "Failed to load URDF for robot %s", robot_name.c_str());
+          RCLCPP_WARN(this->get_logger(), "Failed to load URDF for robot %s (type: %s)", robot_name.c_str(), robot_type.c_str());
         }
       }
     }
@@ -169,7 +180,8 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
   for (const auto& robot_pair : other_robot_descriptions_) {
     const std::string& robot_name = robot_pair.first;
     if (!robot_pair.second.empty()) {
-      apply_collision_objects_from_robot_description_and_tf(robot_name + "_2/base_link", robot_name);
+      // base_frameも{robot_name}/base_link形式に修正
+      apply_collision_objects_from_robot_description_and_tf(robot_name + "/base_link", robot_name);
     }
   }
 
@@ -574,9 +586,9 @@ void Zx200ReleaseSimpleActionServer::apply_collision_objects_from_robot_descript
         processed_links++;
         
         try {
-          // TFから該当リンクの位置を取得
+          // TFから該当リンクの位置を取得 ({robot_name}/{link_name}形式)
           geometry_msgs::msg::TransformStamped transform;
-          std::string tf_frame_name = collision_object_prefix + "_2/" + link->name;
+          std::string tf_frame_name = collision_object_prefix + "/" + link->name;
           transform = tf_buffer_->lookupTransform(
             move_group_->getPlanningFrame(), 
             tf_frame_name,
@@ -705,7 +717,7 @@ void Zx200ReleaseSimpleActionServer::apply_collision_objects_from_robot_descript
           
         } catch (tf2::TransformException& ex) {
           RCLCPP_WARN(this->get_logger(), "Could not get transform for link %s (frame: %s): %s", 
-                     link->name.c_str(), (collision_object_prefix + "_2/" + link->name).c_str(), ex.what());
+                     link->name.c_str(), (collision_object_prefix + "/" + link->name).c_str(), ex.what());
           continue;
         }
       }

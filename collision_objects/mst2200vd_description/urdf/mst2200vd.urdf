@@ -14,12 +14,12 @@
   <link name="track_link">
     <visual>
       <geometry>
-        <mesh filename="package://mst110cr_description/meshes/mst2200vd-crawler.dae"/>
+        <mesh filename="package://mst2200vd_description/meshes/mst2200vd-crawler.dae"/>
       </geometry>
     </visual>
     <collision>
       <geometry>
-        <mesh filename="package://mst110cr_description/meshes/mst2200vd-crawler.dae"/>
+        <mesh filename="package://mst2200vd_description/meshes/mst2200vd-crawler.dae"/>
       </geometry>
     </collision>
     <inertial>
@@ -40,13 +40,13 @@
     <visual>
       <origin xyz="0 0 0"/>
       <geometry>
-        <mesh filename="package://mst110cr_description/meshes/mst2200vd-body.dae"/>
+        <mesh filename="package://mst2200vd_description/meshes/mst2200vd-body.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin xyz="0 0 0"/>
       <geometry>
-        <mesh filename="package://mst110cr_description/meshes/mst2200vd-body.dae"/>
+        <mesh filename="package://mst2200vd_description/meshes/mst2200vd-body.dae"/>
       </geometry>
     </collision>
     <inertial>
@@ -68,13 +68,13 @@
     <visual>
       <origin xyz="0 0 0"/>
       <geometry>
-        <mesh filename="package://mst110cr_description/meshes/mst2200vd-vessel.dae"/>
+        <mesh filename="package://mst2200vd_description/meshes/mst2200vd-vessel.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin xyz="0 0 0"/>
       <geometry>
-        <mesh filename="package://mst110cr_description/meshes/mst2200vd-vessel.dae"/>
+        <mesh filename="package://mst2200vd_description/meshes/mst2200vd-vessel.dae"/>
       </geometry>
     </collision>
     <inertial>
@@ -96,13 +96,13 @@
     <visual>
       <origin xyz="0 0 0"/>
       <geometry>
-        <mesh filename="package://mst110cr_description/meshes/mst2200vd-vessel_cylinder.dae"/>
+        <mesh filename="package://mst2200vd_description/meshes/mst2200vd-vessel_cylinder.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin xyz="0 0 0"/>
       <geometry>
-        <mesh filename="package://mst110cr_description/meshes/mst2200vd-vessel_cylinder.dae"/>
+        <mesh filename="package://mst2200vd_description/meshes/mst2200vd-vessel_cylinder.dae"/>
       </geometry>
     </collision>
     <inertial>
@@ -125,13 +125,13 @@
     <visual>
       <origin xyz="0 0 0"/>
       <geometry>
-        <mesh filename="package://mst110cr_description/meshes/mst2200vd-vessel_rod.dae"/>
+        <mesh filename="package://mst2200vd_description/meshes/mst2200vd-vessel_rod.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin xyz="0 0 0"/>
       <geometry>
-        <mesh filename="package://mst110cr_description/meshes/mst2200vd-vessel_rod.dae"/>
+        <mesh filename="package://mst2200vd_description/meshes/mst2200vd-vessel_rod.dae"/>
       </geometry>
     </collision>
     <inertial>
