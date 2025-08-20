@@ -191,7 +191,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
   for (const auto& robot_pair : other_robot_descriptions_) {
     const std::string& robot_name = robot_pair.first;
     if (!robot_pair.second.empty()) {
-      apply_collision_objects_from_robot_description_and_tf(robot_name + "_tf/base_link", robot_name);
+      apply_collision_objects_from_robot_description_and_tf(robot_name + "_2/base_link", robot_name);
     }
   }
 
@@ -718,9 +718,9 @@ void Zx200ExcavateSimpleActionServer::apply_collision_objects_from_robot_descrip
         processed_links++;
         
         try {
-          // TFから該当リンクの位置を取得 ({robot_name}_tf/{link_name}形式)
+          // TFから該当リンクの位置を取得 ({robot_name}_2/{link_name}形式)
           geometry_msgs::msg::TransformStamped transform;
-          std::string tf_frame_name = collision_object_prefix + "_tf/" + link->name;
+          std::string tf_frame_name = collision_object_prefix + "_2/" + link->name;
           transform = tf_buffer_->lookupTransform(
             move_group_->getPlanningFrame(), 
             tf_frame_name,
@@ -849,7 +849,7 @@ void Zx200ExcavateSimpleActionServer::apply_collision_objects_from_robot_descrip
           
         } catch (tf2::TransformException& ex) {
           RCLCPP_WARN(this->get_logger(), "Could not get transform for link %s (frame: %s): %s", 
-                     link->name.c_str(), (collision_object_prefix + "_tf/" + link->name).c_str(), ex.what());
+                     link->name.c_str(), (collision_object_prefix + "_2/" + link->name).c_str(), ex.what());
           continue;
         }
       }
