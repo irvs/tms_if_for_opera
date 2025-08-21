@@ -56,7 +56,6 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
-            {'other_robots_config': LaunchConfiguration('other_robots_config')},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
     zx200_change_pose_plan_action_server_node = Node(
@@ -68,7 +67,6 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
-            {'other_robots_config': LaunchConfiguration('other_robots_config')},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
     zx200_excavate_simple_action_server_node = Node(
@@ -80,7 +78,6 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
-            {'other_robots_config': LaunchConfiguration('other_robots_config')},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
     zx200_excavate_simple_plan_action_server_node = Node(
@@ -92,7 +89,6 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
-            {'other_robots_config': LaunchConfiguration('other_robots_config')},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
     zx200_release_simple_action_server_node = Node(
@@ -104,6 +100,14 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}
+        ])
+    collision_updater_node = Node(
+        package='tms_if_for_opera',
+        executable='collision_updater',
+        namespace='zx200',
+        parameters=[
+            {'planning_group': LaunchConfiguration('planning_group')},
             {'other_robots_config': LaunchConfiguration('other_robots_config')},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
@@ -132,6 +136,7 @@ def generate_launch_description():
         zx200_excavate_simple_plan_action_server_node,
         zx200_release_simple_action_server_node,
         # backhoe_excavate_simple_action_server_node
+        collision_updater_node,
     ])
 
     return ld
