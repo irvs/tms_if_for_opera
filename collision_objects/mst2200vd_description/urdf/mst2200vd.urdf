@@ -5,13 +5,13 @@
 <!-- =================================================================================== -->
 <robot name="mst2200vd">
   <!-- Base Link -->
-  <link name="base_link"/>
+  <link name="base_root"/>
   <!-- Track {{{ -->
   <joint name="base_joint" type="fixed">
-    <parent link="base_link"/>
-    <child link="track_link"/>
+    <parent link="base_root"/>
+    <child link="base_link"/>
   </joint>
-  <link name="track_link">
+  <link name="base_link">
     <visual>
       <geometry>
         <mesh filename="package://mst2200vd_description/meshes/mst2200vd-crawler.dae"/>
@@ -33,10 +33,10 @@
   <joint name="swing_joint" type="continuous">
     <origin xyz="0 0 1"/>
     <axis xyz="0 0 1"/>
-    <parent link="track_link"/>
-    <child link="body_link"/>
+    <parent link="base_root"/>
+    <child link="upper_link"/>
   </joint>
-  <link name="body_link">
+  <link name="upper_link">
     <visual>
       <origin xyz="0 0 0"/>
       <geometry>
@@ -49,6 +49,18 @@
         <mesh filename="package://mst2200vd_description/meshes/mst2200vd-body.dae"/>
       </geometry>
     </collision>
+    <visual>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://mst2200vd_description/meshes/mst2200vd-vessel.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://mst2200vd_description/meshes/mst2200vd-vessel.dae"/>
+      </geometry>
+    </collision>
     <inertial>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <mass value="0.03"/>
@@ -57,7 +69,7 @@
   </link>
   <!-- }}} Body ends here -->
   <!-- Vessel {{{ -->
-  <joint name="vessel_pin_joint" type="revolute">
+  <!-- <joint name="vessel_pin_joint" type="revolute">
     <origin xyz="-2.389 0 0.562"/>
     <axis xyz="0 1 0"/>
     <parent link="body_link"/>
@@ -139,6 +151,6 @@
       <mass value="0.03"/>
       <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
     </inertial>
-  </link>
+  </link> -->
   <!-- }}} Vessel Rod ends here -->
 </robot>

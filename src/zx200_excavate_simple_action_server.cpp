@@ -207,7 +207,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
           if (excavator_ik_.inverseKinematics4Dof(
                   goal->position_with_angle.position.x + offset*cos(radians),
                   goal->position_with_angle.position.y + offset*sin(radians),
-                  goal->position_with_angle.position.z - 0.5,
+                  goal->position_with_angle.position.z - 1.0,
                   cand1,
                   target_joint_values) == 0)
           {
@@ -222,7 +222,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
           if (excavator_ik_.inverseKinematics4Dof(
                   goal->position_with_angle.position.x + offset*cos(radians),
                   goal->position_with_angle.position.y + offset*sin(radians),
-                  goal->position_with_angle.position.z - 0.5,
+                  goal->position_with_angle.position.z - 1.0,
                   cand2,
                   target_joint_values) == 0)
           {

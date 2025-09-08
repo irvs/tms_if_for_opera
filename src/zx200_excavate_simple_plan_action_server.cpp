@@ -191,8 +191,8 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
 
 
   const double step = 0.01;
-  // const double theta_w = goal->position_with_angle.theta_w;
-  const double theta_w = 0.0;
+  const double theta_w = goal->position_with_angle.theta_w;
+  // const double theta_w = 0.0;
   const double theta_min = 0.0;
   const double theta_max = M_PI;
   std::vector<double> target_joint_values(joint_names_.size(), 0.0);
@@ -209,7 +209,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
           if (excavator_ik_.inverseKinematics4Dof(
                   goal->position_with_angle.position.x + offset*cos(radians),
                   goal->position_with_angle.position.y + offset*sin(radians),
-                  goal->position_with_angle.position.z - 0.5,
+                  goal->position_with_angle.position.z - 1.0,
                   cand1,
                   target_joint_values) == 0)
           {
@@ -224,7 +224,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
           if (excavator_ik_.inverseKinematics4Dof(
                   goal->position_with_angle.position.x + offset*cos(radians),
                   goal->position_with_angle.position.y + offset*sin(radians),
-                  goal->position_with_angle.position.z - 0.5,
+                  goal->position_with_angle.position.z - 1.0,
                   cand2,
                   target_joint_values) == 0)
           {

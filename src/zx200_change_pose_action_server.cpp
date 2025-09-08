@@ -157,6 +157,7 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
       planning_scene_msg.link_padding.push_back(padding_msg);
   }
   planning_scene_interface_.applyPlanningScene(planning_scene_msg);
+  RCLCPP_INFO(this->get_logger(), "Planning scene applied with link padding.");
 
   // Clear constraints
   // move_group_->clearPathConstraints();
