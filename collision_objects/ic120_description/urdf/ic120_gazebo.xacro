@@ -1,0 +1,93 @@
+<?xml version="1.0"?>
+<robot name="ic120" xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:property name="PI" value="3.1415926535" />
+  <xacro:property name="temp_mass" value="1" />
+  <xacro:property name="base_mass" value="1" />
+  <xacro:property name="model_offset_x" value="3.1" />
+  <xacro:property name="model_offset_y" value="-1.5" />
+  <!-- <xacro:property name="model_offset_x" value="-1.5" />
+  <xacro:property name="model_offset_y" value="-3.1" /> -->
+  <xacro:property name="tf_prefix" value=""/>
+
+  <xacro:include filename="$(find ic120_description)/urdf/ic120.xacro" />
+
+
+  <xacro:macro name="wheel_macro" params="parent prefix xyz">
+    <joint name="${tf_prefix}/${prefix}_joint" type="continuous">
+        <origin xyz="${xyz}" rpy="${radians(-90)} 0 0"/>
+        <axis xyz="0 0 1" />
+        <parent link="${tf_prefix}/${parent}"/>
+        <child  link="${tf_prefix}/${prefix}_link"/>
+    </joint>
+    <transmission name="${tf_prefix}/${prefix}_trans">
+      <type>transmission_interface/SimpleTransmission</type>
+        <actuator name="${tf_prefix}/{prefix}_motor">
+          <mechanicalReduction>1</mechanicalReduction>
+        </actuator>
+      <joint name="${tf_prefix}/${prefix}_joint">
+        <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+      </joint>
+    </transmission>
+    <link name="${tf_prefix}/${prefix}_link">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="1"/>
+            <inertia ixx="1" ixy="0.0" ixz="0.0" iyy="1" iyz="0.0" izz="1"/>
+        </inertial>
+        <collision>
+            <geometry>
+            <cylinder radius="0.5" length="0.3" />
+            </geometry>
+        </collision>
+    </link>
+    <gazebo reference="${tf_prefix}/${prefix}_link">
+        <mu1>10</mu1>
+        <mu2>10</mu2>
+        <kp>1000000.0</kp>
+        <kd>1000</kd>
+    </gazebo>
+  </xacro:macro> 
+
+
+  <xacro:macro name="fake_wheel_macro" params="parent prefix xyz">
+    <joint name="${tf_prefix}/${prefix}_joint" type="continuous">
+        <origin xyz="${xyz}" rpy="${radians(-90)} 0 0"/>
+        <axis xyz="0 0 1" />
+        <parent link="${tf_prefix}/${parent}"/>
+        <child  link="${tf_prefix}/${prefix}_link"/>
+    </joint>
+    <link name="${tf_prefix}/${prefix}_link">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="1"/>
+            <inertia ixx="1" ixy="0.0" ixz="0.0" iyy="1" iyz="0.0" izz="1"/>
+        </inertial>
+        <collision>
+            <geometry>
+            <cylinder radius="0.5" length="0.3" />
+            </geometry>
+        </collision>
+    </link>
+    <gazebo reference="${tf_prefix}/${prefix}_link">
+        <mu1>0</mu1>
+        <mu2>0</mu2>
+    </gazebo>
+  </xacro:macro> 
+
+
+
+
+  <!--Track(Multi Wheel) Definition-->
+  <xacro:wheel_macro prefix="${ic120_description_dir_path}left_middle_wheel" parent="base_link" xyz="0 2 0.5"/>
+  <xacro:fake_wheel_macro prefix="left_front_wheel" parent="base_link" xyz="1.5 1 0.5"/>
+  <xacro:fake_wheel_macro prefix="left_rear_wheel" parent="base_link" xyz="-1.5 1 0.5"/>
+  <xacro:wheel_macro prefix="right_middle_wheel" parent="base_link" xyz="0 -2 0.5"/>
+  <xacro:fake_wheel_macro prefix="right_front_wheel" parent="base_link" xyz="1.5 -1 0.5"/>
+  <xacro:fake_wheel_macro prefix="right_rear_wheel" parent="base_link" xyz="-1.5 -1 0.5"/> 
+
+  <gazebo>
+    <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so"/>
+  </gazebo>
+
+</robot>

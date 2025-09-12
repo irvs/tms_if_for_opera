@@ -4,6 +4,14 @@
 // #include <moveit_msgs/msg/orientation_constraint.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/buffer.h>
+#include <urdf/model.h>
+#include <geometric_shapes/shape_operations.h>
+#include <ament_index_cpp/get_package_share_directory.hpp>
+#include <fstream>
+#include <sstream>
+using std::cout;
 
 using namespace tms_if_for_opera;
 
@@ -24,8 +32,23 @@ Zx200ChangePoseActionServer::Zx200ChangePoseActionServer(const rclcpp::NodeOptio
   RCLCPP_INFO(this->get_logger(), "Collision object record name: %s", collision_object_record_name_.c_str());
 
   this->declare_parameter<std::string>("collision_object_dump_record_name", "");
-  this->get_parameter("collision_object_dump_record_name", collision_object_dump_record_name_);
-  RCLCPP_INFO(this->get_logger(), "Collision object dump record name: %s", collision_object_dump_record_name_.c_str());
+  std::string dump_record_names_str;
+  this->get_parameter("collision_object_dump_record_name", dump_record_names_str);
+  
+  // コンマ区切りの文字列を配列に変換
+  if (!dump_record_names_str.empty()) {
+    std::stringstream ss(dump_record_names_str);
+    std::string item;
+    while (std::getline(ss, item, ',')) {
+      // 前後の空白を削除
+      item.erase(0, item.find_first_not_of(" \t"));
+      item.erase(item.find_last_not_of(" \t") + 1);
+      if (!item.empty()) {
+        collision_object_dump_record_name_.push_back(item);
+      }
+    }
+  }
+  RCLCPP_INFO(this->get_logger(), "Collision object dump record name count: %zu", collision_object_dump_record_name_.size());
 
   /* Create server */
   RCLCPP_INFO(this->get_logger(), "Create server.");  // debug
@@ -107,7 +130,7 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
 {
   // Apply collision object
   apply_collision_objects_from_db(collision_object_record_name_);
-  apply_collision_objects_dump_from_db(collision_object_dump_record_name_);
+  apply_collision_objects_mesh_from_db(collision_object_dump_record_name_);
 
   // Get link info
   link_names_ = move_group_->getLinkNames();
@@ -134,6 +157,7 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
       planning_scene_msg.link_padding.push_back(padding_msg);
   }
   planning_scene_interface_.applyPlanningScene(planning_scene_msg);
+  RCLCPP_INFO(this->get_logger(), "Planning scene applied with link padding.");
 
   // Clear constraints
   // move_group_->clearPathConstraints();
@@ -161,6 +185,7 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
   if (goal->trajectory.points.size() > 0 && goal->pose_sequence.size() == 0 &&
       goal->position_with_angle_sequence.size() == 0)
   {
+    RCLCPP_INFO(this->get_logger(), "Entered trajectory-based planning block.");
     for (const auto& point : goal->trajectory.points)
     {
       std::map<std::string, double> target_joint_values;
@@ -176,6 +201,12 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
         }
       }
       move_group_->setJointValueTarget(target_joint_values);
+
+      // target_joint_valuesの中身を表示
+      // for (size_t i = 0; i < target_joint_values.size() && i < joint_names_.size(); ++i)
+      // {
+      //   RCLCPP_INFO(this->get_logger(), "Joint: %s, Value: %f", joint_names_[i].c_str(), target_joint_values[i]);
+      // }
 
       feedback->state = "PLANNING";
       goal_handle->publish_feedback(feedback);
@@ -200,6 +231,7 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
   else if (goal->pose_sequence.size() > 0 && goal->trajectory.points.size() == 0 &&
            goal->position_with_angle_sequence.size() == 0)
   {
+    RCLCPP_INFO(this->get_logger(), "Entered pose-sequence-based planning block.");
     for (const auto& pose : goal->pose_sequence)
     {
       move_group_->setPoseTarget(pose);
@@ -227,6 +259,7 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
   else if (goal->position_with_angle_sequence.size() > 0 && goal->trajectory.points.size() == 0 &&
            goal->pose_sequence.size() == 0)
   {
+    RCLCPP_INFO(this->get_logger(), "Entered position-with-angle-sequence-based planning block.");
     for (const auto& point : goal->position_with_angle_sequence)
     {
       // Get end effector pose to use pose/position constraint
@@ -240,6 +273,12 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
         break;
       }
 
+      // target_joint_valuesの中身を表示
+      // target_joint_valuesの中身を表示
+      for (size_t i = 0; i < target_joint_values.size(); ++i){
+        RCLCPP_INFO(this->get_logger(), "Joint: %s, Value: %f", joint_names_[i].c_str(), target_joint_values[i]);
+      }
+      
       // // Set pose constraint
       // // Check if constraint exists
       // if (goal->constraints.joint_constraints.empty() && goal->constraints.position_constraints.empty() &&
@@ -303,7 +342,7 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
   }
   else
   {
-    RCLCPP_INFO(this->get_logger(), "No or too much input.");
+    RCLCPP_INFO(this->get_logger(), "Entered invalid input block.");
     feedback->state = "ABORTED";
     goal_handle->publish_feedback(feedback);
     result->error_code.val = 9999;
@@ -401,82 +440,73 @@ void Zx200ChangePoseActionServer::apply_collision_objects_from_db(const std::str
   }
 }
 
-void Zx200ChangePoseActionServer::apply_collision_objects_dump_from_db(const std::string& record_name)
+void Zx200ChangePoseActionServer::apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names)
 {
-  // Load collision objects from DB
-  // RCLCPP_INFO(this->get_logger(), "Loading collision objects from DB");
-
-  mongocxx::client client{ mongocxx::uri{ "mongodb://localhost:27017" } };
-  mongocxx::database db = client["rostmsdb"];
-  mongocxx::collection collection = db["parameter"];
-  bsoncxx::builder::stream::document filter_builder;
-  filter_builder << "record_name" << record_name;
-  auto filter = filter_builder.view();
-  auto result = collection.find_one(filter);
-
-  if ((record_name != "") && !result)
+  for (const auto& record_name : record_names)
   {
-    RCLCPP_ERROR(this->get_logger(), "Failed to get collision objects from DB");
-    return;
+    // Load collision objects from DB
+    mongocxx::client client{ mongocxx::uri{ "mongodb://localhost:27017" } };
+    mongocxx::database db = client["rostmsdb"];
+    mongocxx::collection collection = db["parameter"];
+    bsoncxx::builder::stream::document filter_builder;
+    filter_builder << "record_name" << record_name;
+    auto filter = filter_builder.view();
+    auto result = collection.find_one(filter);
+
+    if ((record_name != "") && !result)
+    {
+      RCLCPP_ERROR(this->get_logger(), "Failed to get collision objects from DB for record: %s", record_name.c_str());
+      continue;
+    }
+    else if (record_name == "")
+    {
+      RCLCPP_INFO(this->get_logger(), "No collision objects to load");
+      continue;
+    }
+    else
+    {
+      RCLCPP_INFO(this->get_logger(), "Succeeded to get collision objects from DB for record: %s", record_name.c_str());
+    }
+
+    auto collision_objects_dump = result->view();
+    moveit_msgs::msg::CollisionObject co_dump_msg;
+    co_dump_msg.header.frame_id = move_group_->getPlanningFrame();
+    co_dump_msg.id = record_name + "_mesh"; // 一意のIDを付与
+
+    // Apply collision objects
+    auto mesh_binary = collision_objects_dump["data"].get_binary();
+    std::string temp_mesh_path = "/tmp/temp_dump_mesh_" + record_name + ".dae";
+    std::ofstream ofs(temp_mesh_path, std::ios::binary);
+    ofs.write(reinterpret_cast<const char*>(mesh_binary.bytes), mesh_binary.size);
+    ofs.close();
+    shapes::Mesh *m = shapes::createMeshFromResource("file://" + temp_mesh_path);
+    if (!m)
+    {
+      RCLCPP_ERROR(this->get_logger(), "Failed to load mesh from temporary file for record: %s", record_name.c_str());
+      continue;
+    }
+    shape_msgs::msg::Mesh mesh_msg;
+    shapes::ShapeMsg shape_msg;
+    shapes::constructMsgFromShape(m, shape_msg);
+    mesh_msg = boost::get<shape_msgs::msg::Mesh>(shape_msg);
+
+    // Get collision object pose
+    geometry_msgs::msg::Pose mesh_pose;
+    mesh_pose.position.x = collision_objects_dump["x"].get_double().value;
+    mesh_pose.position.y = collision_objects_dump["y"].get_double().value;
+    mesh_pose.position.z = collision_objects_dump["z"].get_double().value;
+    mesh_pose.orientation.x = collision_objects_dump["qx"].get_double().value;
+    mesh_pose.orientation.y = collision_objects_dump["qy"].get_double().value;
+    mesh_pose.orientation.z = collision_objects_dump["qz"].get_double().value;
+    mesh_pose.orientation.w = collision_objects_dump["qw"].get_double().value;
+
+    // CollisionObjectにメッシュを追加
+    co_dump_msg.meshes.push_back(mesh_msg);
+    co_dump_msg.mesh_poses.push_back(mesh_pose);
+    co_dump_msg.operation = moveit_msgs::msg::CollisionObject::ADD;
+
+    planning_scene_interface_.applyCollisionObject(co_dump_msg);
   }
-  else if (record_name == "")
-  {
-    RCLCPP_INFO(this->get_logger(), "No collision objects to load");
-    return;
-  }
-  else
-  {
-    RCLCPP_INFO(this->get_logger(), "Succeeded to get collision objects from DB");
-  }
-
-  // Remove all collision objects
-  // std::vector<std::string> object_ids = planning_scene_interface_.getKnownObjectNames();
-  // planning_scene_interface_.removeCollisionObjects(object_ids);
-
-  auto collision_objects_dump = result->view();
-  moveit_msgs::msg::CollisionObject co_dump_msg;
-  // RCLCPP_INFO(this->get_logger(), "Retrieved document: %s", bsoncxx::to_json(collision_objects_dump).c_str());
-  co_dump_msg.header.frame_id = move_group_->getPlanningFrame();
-  // co_dump_msg.id = collision_objects_dump["_id"].get_utf8().value.to_string();
-
-  // Apply collision objects
-  auto mesh_binary = collision_objects_dump["data"].get_binary();
-  std::string temp_mesh_path = "/tmp/temp_dump_mesh.dae";  // .dae拡張子！（元ファイル形式に合わせる）
-  std::ofstream ofs(temp_mesh_path, std::ios::binary);
-  ofs.write(reinterpret_cast<const char*>(mesh_binary.bytes), mesh_binary.size);
-  ofs.close();
-  shapes::Mesh *m = shapes::createMeshFromResource("file://" + temp_mesh_path);
-  if (!m)
-  {
-    RCLCPP_ERROR(this->get_logger(), "Failed to load mesh from temporary file!");
-    return;
-  }
-  shape_msgs::msg::Mesh mesh_msg;
-  shapes::ShapeMsg shape_msg;
-  shapes::constructMsgFromShape(m, shape_msg);
-  mesh_msg = boost::get<shape_msgs::msg::Mesh>(shape_msg);
-
-  // Get collision object pose
-  geometry_msgs::msg::Pose mesh_pose;
-  mesh_pose.position.x = collision_objects_dump["x"].get_double().value;
-  mesh_pose.position.y = collision_objects_dump["y"].get_double().value;
-  mesh_pose.position.z = collision_objects_dump["z"].get_double().value;
-  mesh_pose.orientation.x = collision_objects_dump["qx"].get_double().value;
-  mesh_pose.orientation.y = collision_objects_dump["qy"].get_double().value;
-  mesh_pose.orientation.z = collision_objects_dump["qz"].get_double().value;
-  mesh_pose.orientation.w = collision_objects_dump["qw"].get_double().value;
-
-  // CollisionObjectにメッシュを追加
-  co_dump_msg.meshes.push_back(mesh_msg);
-  co_dump_msg.mesh_poses.push_back(mesh_pose);
-  co_dump_msg.operation = moveit_msgs::msg::CollisionObject::ADD;
-
-  // Planning Sceneにオブジェクトを追加
-  std::vector<moveit_msgs::msg::CollisionObject> collision_objects;
-  collision_objects.push_back(co_dump_msg);
-
-  planning_scene_interface_.applyCollisionObject(co_dump_msg);
-
 }
 
 double Zx200ChangePoseActionServer::getDoubleValue(const bsoncxx::document::element& element)

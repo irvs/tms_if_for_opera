@@ -5,7 +5,13 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <moveit/robot_state/robot_state.h>
-
+#include <sstream>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/buffer.h>
+#include <urdf/model.h>
+#include <geometric_shapes/shape_operations.h>
+#include <ament_index_cpp/get_package_share_directory.hpp>
+#include <fstream>
 
 using namespace tms_if_for_opera;
 
@@ -26,8 +32,23 @@ Zx200ExcavateSimpleActionServer::Zx200ExcavateSimpleActionServer(const rclcpp::N
   RCLCPP_INFO(this->get_logger(), "Collision object record name: %s", collision_object_record_name_.c_str());
 
   this->declare_parameter<std::string>("collision_object_dump_record_name", "");
-  this->get_parameter("collision_object_dump_record_name", collision_object_dump_record_name_);
-  RCLCPP_INFO(this->get_logger(), "Collision object dump record name: %s", collision_object_dump_record_name_.c_str());
+  std::string dump_record_names_str;
+  this->get_parameter("collision_object_dump_record_name", dump_record_names_str);
+  
+  // コンマ区切りの文字列を配列に変換
+  if (!dump_record_names_str.empty()) {
+    std::stringstream ss(dump_record_names_str);
+    std::string item;
+    while (std::getline(ss, item, ',')) {
+      // 前後の空白を削除
+      item.erase(0, item.find_first_not_of(" \t"));
+      item.erase(item.find_last_not_of(" \t") + 1);
+      if (!item.empty()) {
+        collision_object_dump_record_name_.push_back(item);
+      }
+    }
+  }
+  RCLCPP_INFO(this->get_logger(), "Collision object dump record name count: %zu", collision_object_dump_record_name_.size());
 
   /* Create server */
   RCLCPP_INFO(this->get_logger(), "Create server.");  // debug
@@ -71,7 +92,8 @@ Zx200ExcavateSimpleActionServer::Zx200ExcavateSimpleActionServer(const rclcpp::N
 
   // For emg stop
   this->emg_stop_publisher_ = this->create_publisher<std_msgs::msg::Bool>("/zx200/emg_stop", 10);
-}
+
+ }
 
 rclcpp_action::GoalResponse Zx200ExcavateSimpleActionServer::handle_goal(
     const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const Zx200ExcavateSimple::Goal> goal)
@@ -131,7 +153,7 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
 
   // Apply collision object
   apply_collision_objects_from_db(collision_object_record_name_);
-  apply_collision_objects_dump_from_db(collision_object_dump_record_name_);
+  apply_collision_objects_mesh_from_db(collision_object_dump_record_name_);
 
   // Get link info
   link_names_ = move_group_->getLinkNames();
@@ -164,80 +186,128 @@ void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx
 
   double radians = atan2(goal->position_with_angle.position.y, goal->position_with_angle.position.x);
   // radians = M_PI - radians;
-  double offset = 1.5;
+  double offset = goal->position_with_angle.offset;
   RCLCPP_INFO(this->get_logger(), "%f", radians);
 
 
-  /*** Move to a position 1 m higher than the target excavation position ***/
-  // Get target joint values
+  const double step = 0.01;
+  const double theta_w = goal->position_with_angle.theta_w;
+  // const double theta_w = 0.0;
+  const double theta_min = 0.0;
+  const double theta_max = M_PI;
   std::vector<double> target_joint_values(joint_names_.size(), 0.0);
-  for (double i = 1.5; i < M_PI; i += 0.01)
-  {
-    if (excavator_ik_.inverseKinematics4Dof(goal->position_with_angle.position.x + offset*cos(radians) , goal->position_with_angle.position.y + offset*sin(radians),
-                                            goal->position_with_angle.position.z - 0.5, i, target_joint_values) == 0)
-    {
-      break;
-    }
-    if(i >= M_PI / 3.0 - 0.01)
-    {
-      handle_error("Failed to calculate inverse kinematics");
-      // result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
-      // goal_handle->abort(result);
-      return;
-    }
+
+  bool found = false;
+  double theta_offset = 0.1;
+  // double best_theta = theta_w - theta_offset;
+  double best_theta = theta_w;
+
+  for (double delta = 0.0; delta <= theta_max; delta += step) {
+      // 1) θw + Δ を試す
+      double cand1 = theta_w + delta;
+      if (cand1 <= theta_max) {
+          if (excavator_ik_.inverseKinematics4Dof(
+                  goal->position_with_angle.position.x + offset*cos(radians),
+                  goal->position_with_angle.position.y + offset*sin(radians),
+                  goal->position_with_angle.position.z - 1.0,
+                  cand1,
+                  target_joint_values) == 0)
+          {
+              best_theta = cand1;
+              found = true;
+              break;
+          }
+      }
+      // 2) θw - Δ を試す
+      double cand2 = theta_w - delta;
+      if (delta > 0.0 && cand2 >= theta_min) {
+          if (excavator_ik_.inverseKinematics4Dof(
+                  goal->position_with_angle.position.x + offset*cos(radians),
+                  goal->position_with_angle.position.y + offset*sin(radians),
+                  goal->position_with_angle.position.z - 1.0,
+                  cand2,
+                  target_joint_values) == 0)
+          {
+              best_theta = cand2;
+              found = true;
+              break;
+          }
+      }
   }
+
+  if (found) {
+
+  } else {
+      handle_error("Failed to calculate inverse kinematics near theta_w");
+      return;
+  }
+
 
   std::vector<moveit::planning_interface::MoveGroupInterface::Plan> plans;
   std::vector<std::vector<double>> joint_targets;
+
+  // Swingだけ先に動かす
+  std::vector<double> swing_joint_values(joint_names_.size(), 0.0);
+  swing_joint_values = move_group_->getCurrentJointValues();
+  for (size_t i = 0; i < joint_names_.size(); i++) {
+    if (joint_names_[i] == "swing_joint") {
+      swing_joint_values[i] = target_joint_values[i];
+    }
+  }
+
+  joint_targets.push_back(swing_joint_values);
   
   joint_targets.push_back(target_joint_values);
   
   // arm_joint を追加で動かした状態
   for (size_t i = 0; i < joint_names_.size(); i++) {
     if (joint_names_[i] == "arm_joint") {
-      target_joint_values[i] += 0.3;
+      target_joint_values[i] += 0.1;
+    } else if (joint_names_[i] == "bucket_joint") {
+      target_joint_values[i] = 1.7;
     }
   }
   joint_targets.push_back(target_joint_values);
   
-  // bucket_joint を追加で動かした状態
-  for (size_t i = 0; i < joint_names_.size(); i++) {
-    if (joint_names_[i] == "bucket_joint") {
-      target_joint_values[i] += 0.8;
+  // // bucket_joint を追加で動かした状態
+  // for (size_t i = 0; i < joint_names_.size(); i++) {
+  //   if (joint_names_[i] == "bucket_joint") {
+  //     target_joint_values[i] = 2.2;
+  //   }
+  // }
+  // joint_targets.push_back(target_joint_values);
+  
+  // while(!joint_targets.empty()){
+    // 最初の状態を取得
+    moveit::core::RobotState start_state(*move_group_->getCurrentState());
+    
+    bool planning_success = true;
+    
+    for (const auto& joints : joint_targets) {
+      move_group_->setStartState(start_state);
+      move_group_->setJointValueTarget(joints);
+    
+      moveit::planning_interface::MoveGroupInterface::Plan plan;
+      if (move_group_->plan(plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+        RCLCPP_ERROR(this->get_logger(), "Failed to plan to one of the waypoints");
+        planning_success = false;
+        break;
+      }
+    
+      plans.push_back(plan);  // 成功したら保持
+    
+      // 次の出発点を更新（まだexecuteしてないけど、stateは変える）
+      start_state.setJointGroupPositions(
+        move_group_->getRobotModel()->getJointModelGroup(move_group_->getName()), joints);
+      start_state.update();
     }
-  }
-  joint_targets.push_back(target_joint_values);
-  
-  // 最初の状態を取得
-  moveit::core::RobotState start_state(*move_group_->getCurrentState());
-  
-  bool planning_success = true;
-  
-  for (const auto& joints : joint_targets) {
-    move_group_->setStartState(start_state);
-    move_group_->setJointValueTarget(joints);
-  
-    moveit::planning_interface::MoveGroupInterface::Plan plan;
-    if (move_group_->plan(plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS) {
-      RCLCPP_ERROR(this->get_logger(), "Failed to plan to one of the waypoints");
-      planning_success = false;
-      break;
+    
+    if (!planning_success) {
+      RCLCPP_WARN(this->get_logger(), "Aborting execution due to planning failure.");
+      result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
+      goal_handle->abort(result);
+      return;
     }
-  
-    plans.push_back(plan);  // 成功したら保持
-  
-    // 次の出発点を更新（まだexecuteしてないけど、stateは変える）
-    start_state.setJointGroupPositions(
-      move_group_->getRobotModel()->getJointModelGroup(move_group_->getName()), joints);
-    start_state.update();
-  }
-  
-  if (!planning_success) {
-    RCLCPP_WARN(this->get_logger(), "Aborting execution due to planning failure.");
-    result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
-    goal_handle->abort(result);
-    return;
-  }
   
   // // 成功した場合、順番に実行
   // for (const auto& plan : plans) {
@@ -469,83 +539,75 @@ void Zx200ExcavateSimpleActionServer::apply_collision_objects_from_db(const std:
   }
 }
 
-void Zx200ExcavateSimpleActionServer::apply_collision_objects_dump_from_db(const std::string& record_name)
+void Zx200ExcavateSimpleActionServer::apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names)
 {
-  // Load collision objects from DB
-  // RCLCPP_INFO(this->get_logger(), "Loading collision objects from DB");
-
-  mongocxx::client client{ mongocxx::uri{ "mongodb://localhost:27017" } };
-  mongocxx::database db = client["rostmsdb"];
-  mongocxx::collection collection = db["parameter"];
-  bsoncxx::builder::stream::document filter_builder;
-  filter_builder << "record_name" << record_name;
-  auto filter = filter_builder.view();
-  auto result = collection.find_one(filter);
-
-  if ((record_name != "") && !result)
+  for (const auto& record_name : record_names)
   {
-    RCLCPP_ERROR(this->get_logger(), "Failed to get collision objects from DB");
-    return;
+    // Load collision objects from DB
+    mongocxx::client client{ mongocxx::uri{ "mongodb://localhost:27017" } };
+    mongocxx::database db = client["rostmsdb"];
+    mongocxx::collection collection = db["parameter"];
+    bsoncxx::builder::stream::document filter_builder;
+    filter_builder << "record_name" << record_name;
+    auto filter = filter_builder.view();
+    auto result = collection.find_one(filter);
+
+    if ((record_name != "") && !result)
+    {
+      RCLCPP_ERROR(this->get_logger(), "Failed to get collision objects from DB for record: %s", record_name.c_str());
+      continue;
+    }
+    else if (record_name == "")
+    {
+      RCLCPP_INFO(this->get_logger(), "No collision objects to load");
+      continue;
+    }
+    else
+    {
+      RCLCPP_INFO(this->get_logger(), "Succeeded to get collision objects from DB for record: %s", record_name.c_str());
+    }
+
+    auto collision_objects_dump = result->view();
+    moveit_msgs::msg::CollisionObject co_dump_msg;
+    co_dump_msg.header.frame_id = move_group_->getPlanningFrame();
+    co_dump_msg.id = record_name + "_mesh"; // 一意のIDを付与
+
+    // Apply collision objects
+    auto mesh_binary = collision_objects_dump["data"].get_binary();
+    std::string temp_mesh_path = "/tmp/temp_dump_mesh_" + record_name + ".dae";
+    std::ofstream ofs(temp_mesh_path, std::ios::binary);
+    ofs.write(reinterpret_cast<const char*>(mesh_binary.bytes), mesh_binary.size);
+    ofs.close();
+    shapes::Mesh *m = shapes::createMeshFromResource("file://" + temp_mesh_path);
+    if (!m)
+    {
+      RCLCPP_ERROR(this->get_logger(), "Failed to load mesh from temporary file for record: %s", record_name.c_str());
+      continue;
+    }
+    shape_msgs::msg::Mesh mesh_msg;
+    shapes::ShapeMsg shape_msg;
+    shapes::constructMsgFromShape(m, shape_msg);
+    mesh_msg = boost::get<shape_msgs::msg::Mesh>(shape_msg);
+
+    // Get collision object pose
+    geometry_msgs::msg::Pose mesh_pose;
+    mesh_pose.position.x = collision_objects_dump["x"].get_double().value;
+    mesh_pose.position.y = collision_objects_dump["y"].get_double().value;
+    mesh_pose.position.z = collision_objects_dump["z"].get_double().value;
+    mesh_pose.orientation.x = collision_objects_dump["qx"].get_double().value;
+    mesh_pose.orientation.y = collision_objects_dump["qy"].get_double().value;
+    mesh_pose.orientation.z = collision_objects_dump["qz"].get_double().value;
+    mesh_pose.orientation.w = collision_objects_dump["qw"].get_double().value;
+
+    // CollisionObjectにメッシュを追加
+    co_dump_msg.meshes.push_back(mesh_msg);
+    co_dump_msg.mesh_poses.push_back(mesh_pose);
+    co_dump_msg.operation = moveit_msgs::msg::CollisionObject::ADD;
+
+    planning_scene_interface_.applyCollisionObject(co_dump_msg);
   }
-  else if (record_name == "")
-  {
-    RCLCPP_INFO(this->get_logger(), "No collision objects to load");
-    return;
-  }
-  else
-  {
-    RCLCPP_INFO(this->get_logger(), "Succeeded to get collision objects from DB");
-  }
-
-  // Remove all collision objects
-  // std::vector<std::string> object_ids = planning_scene_interface_.getKnownObjectNames();
-  // planning_scene_interface_.removeCollisionObjects(object_ids);
-
-  auto collision_objects_dump = result->view();
-  moveit_msgs::msg::CollisionObject co_dump_msg;
-  // RCLCPP_INFO(this->get_logger(), "Retrieved document: %s", bsoncxx::to_json(collision_objects_dump).c_str());
-  co_dump_msg.header.frame_id = move_group_->getPlanningFrame();
-  // co_dump_msg.id = collision_objects_dump["_id"].get_utf8().value.to_string();
-
-  // Apply collision objects
-  auto mesh_binary = collision_objects_dump["data"].get_binary();
-  std::string temp_mesh_path = "/tmp/temp_dump_mesh.dae";  // .dae拡張子！（元ファイル形式に合わせる）
-  std::ofstream ofs(temp_mesh_path, std::ios::binary);
-  ofs.write(reinterpret_cast<const char*>(mesh_binary.bytes), mesh_binary.size);
-  ofs.close();
-  shapes::Mesh *m = shapes::createMeshFromResource("file://" + temp_mesh_path);
-  if (!m)
-  {
-    RCLCPP_ERROR(this->get_logger(), "Failed to load mesh from temporary file!");
-    return;
-  }
-  shape_msgs::msg::Mesh mesh_msg;
-  shapes::ShapeMsg shape_msg;
-  shapes::constructMsgFromShape(m, shape_msg);
-  mesh_msg = boost::get<shape_msgs::msg::Mesh>(shape_msg);
-
-  // Get collision object pose
-  geometry_msgs::msg::Pose mesh_pose;
-  mesh_pose.position.x = collision_objects_dump["x"].get_double().value;
-  mesh_pose.position.y = collision_objects_dump["y"].get_double().value;
-  mesh_pose.position.z = collision_objects_dump["z"].get_double().value;
-  mesh_pose.orientation.x = collision_objects_dump["qx"].get_double().value;
-  mesh_pose.orientation.y = collision_objects_dump["qy"].get_double().value;
-  mesh_pose.orientation.z = collision_objects_dump["qz"].get_double().value;
-  mesh_pose.orientation.w = collision_objects_dump["qw"].get_double().value;
-
-  // CollisionObjectにメッシュを追加
-  co_dump_msg.meshes.push_back(mesh_msg);
-  co_dump_msg.mesh_poses.push_back(mesh_pose);
-  co_dump_msg.operation = moveit_msgs::msg::CollisionObject::ADD;
-
-  // Planning Sceneにオブジェクトを追加
-  std::vector<moveit_msgs::msg::CollisionObject> collision_objects;
-  collision_objects.push_back(co_dump_msg);
-
-  planning_scene_interface_.applyCollisionObject(co_dump_msg);
-
 }
+
 
 double Zx200ExcavateSimpleActionServer::getDoubleValue(const bsoncxx::document::element& element)
 {

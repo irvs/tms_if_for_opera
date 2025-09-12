@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot name="ic120" xmlns:xacro="http://www.ros.org/wiki/xacro">
+	<xacro:property name="PI" value="3.1415926535" />
+	<xacro:property name="tf_prefix" value="ic120_tf"/>
+    <xacro:property name="ic120_description_dir_path" value=""/>
+    
+    <!-- Base Link -->
+    <link name="${tf_prefix}/base_link"/>
+    <joint name="base_joint" type="fixed">
+        <parent link="${tf_prefix}/base_link"/>
+        <child link="${tf_prefix}/body_link"/>
+    </joint>
+
+    <link name="${tf_prefix}/body_link">
+        <visual>
+            <geometry>
+                <mesh filename="package://ic120_description/meshes/ic120-body.dae"/>
+                <!-- <mesh filename="${ic120_description_dir_path}/meshes/ic120-body.dae"/> -->
+                <!-- <mesh filename="/home/common/SIP_PROJECTS/M2/DEV_TS/ros2_ws/install/ic120_description/share/ic120_description/meshes/ic120-body.dae"/> -->
+            </geometry>
+        </visual>
+        <inertial>
+            <origin xyz="0.8963 0.1313 1.35" rpy="0 0 0"/>
+            <mass value="0.1"/>
+            <inertia ixx="1.0" ixy="0.0" ixz="0.0"
+                             iyy="1.0" iyz="0.0"
+                             izz="1.0"/>
+        </inertial>
+    </link>
+
+    <!-- left sprocket axis -->
+    <joint name="${ic120_description_dir_path}sprocket_left_joint" type="continuous">
+        <origin xyz="-2.35 1 0.65"/>
+        <axis xyz="0 1 0"/>
+        <parent link="${tf_prefix}/body_link"/>
+        <child link="${tf_prefix}/left_sprocket_link"/>
+    </joint>
+    <link name="${tf_prefix}/left_sprocket_link"/>
+
+    <!-- right sprocket axis -->
+    <joint name="sprocket_right_joint" type="continuous">
+        <origin xyz="-2.35 -1 0.65"/>
+        <axis xyz="0 1 0"/>
+        <parent link="${tf_prefix}/body_link"/>
+        <child link="${tf_prefix}/right_sprocket_link"/>
+    </joint>
+    <link name="${tf_prefix}/right_sprocket_link"/>
+
+    <!-- bucket axis -->
+    <joint name="vessel_pin_joint" type="revolute">
+        <origin xyz="-3.0153 0 0.94605"/>
+        <axis xyz="0 1 0"/>
+        <parent link="${tf_prefix}/body_link"/>
+        <child link="${tf_prefix}/vessel_pin_link"/>
+        <limit lower="${-radians(65)}" upper="0" effort="30" velocity="6.159937255"/>
+    </joint>
+
+    <link name="${tf_prefix}/vessel_pin_link">
+        <visual>
+            <geometry>
+                <mesh filename="package://ic120_description/meshes/ic120-vessel.dae"/>
+            </geometry>
+        </visual>
+        <inertial>
+            <origin xyz="1.978 0.0181 0.773" rpy="0 0 0"/>
+            <mass value="0.1"/>
+            <inertia ixx="1.0" ixy="0.0" ixz="0.0"
+                             iyy="1.0" iyz="0.0"
+                             izz="1.0"/>
+        </inertial>
+    </link>
+
+    <!-- cylinder outer axis -->
+    <joint name="cylinder_head_joint" type="continuous">
+        <origin xyz="-0.75792 0 0.73083"/>
+        <axis xyz="0 1 0"/>
+        <parent link="${tf_prefix}/body_link"/>
+        <child link="${tf_prefix}/cylinder_head_link"/>
+        <mimic joint="vessel_pin_joint" multiplier="${radians(5.72)/radians(-65)}"/>
+    </joint>
+
+    <link name="${tf_prefix}/cylinder_head_link">
+        <visual>
+            <geometry>
+                <mesh filename="package://ic120_description/meshes/ic120-cylinder1.dae"/>
+            </geometry>
+        </visual>
+        <inertial>
+            <origin xyz="-0.4842 0 0.1667" rpy="0 0 0"/>
+            <mass value="0.03"/>
+            <inertia ixx="1.0" ixy="0.0" ixz="0.0"
+                             iyy="1.0" iyz="0.0"
+                             izz="1.0"/>
+        </inertial>
+    </link>
+
+    <!-- cylinder inner prismatic joint -->
+    <joint name="cylinder_rod_prismatic_joint" type="prismatic">
+        <origin xyz="0 0 0"/>
+        <parent link="${tf_prefix}/cylinder_head_link"/>
+        <child link="${tf_prefix}/cylinder_rod_link"/>
+        <axis xyz="-1.4989 0 0.51788"/>
+        <limit lower="-1" upper="1" effort="30" velocity="6.159937255"/>
+        <mimic joint="vessel_pin_joint" multiplier="${0.8/radians(-65)}"/>
+    </joint>
+
+    <link name="${tf_prefix}/cylinder_rod_link">
+        <visual>
+            <geometry>
+                <mesh filename="package://ic120_description/meshes/ic120-cylinder2.dae"/>
+            </geometry>
+        </visual>
+        <inertial>
+            <origin xyz="-0.8807 0 0.3033" rpy="0 0 0"/>
+            <mass value="0.03"/>
+            <inertia ixx="1.0" ixy="0.0" ixz="0.0"
+                             iyy="1.0" iyz="0.0"
+                             izz="1.0"/>
+        </inertial>
+    </link>
+
+    <transmission name="tran1">
+        <type>transmission_interface/SimpleTransmission</type>
+        <joint name="vessel_pin_joint">
+            <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+        </joint>
+        <actuator name="vessel_pin_joint_motor">
+            <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+            <mechanicalReduction>1</mechanicalReduction>
+        </actuator>
+    </transmission>
+
+</robot>

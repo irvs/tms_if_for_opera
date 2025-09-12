@@ -12,10 +12,12 @@ endif()
 
 set(TARGETS
   zx200_change_pose_action_server
+  zx200_change_pose_plan_action_server
   zx200_excavate_simple_action_server
   zx200_excavate_simple_plan_action_server
   zx200_release_simple_action_server
   zx200_change_pose_action_client
+  collision_updater
 )
 
 find_package(ament_cmake REQUIRED)

@@ -292,7 +292,8 @@ int ExcavatorIK::inverseKinematics4Dof(const double x, const double y, const dou
 
   for (int i = 0; i < res_joint_values.size(); i++)
   {
-    if (res_joint_values[i] == NAN)
+    // if (res_joint_values[i] == NAN)
+    if(std::isnan(res_joint_values[i]))
     {
       std::cerr << "Error: solution is not found." << std::endl;
       return -1;
