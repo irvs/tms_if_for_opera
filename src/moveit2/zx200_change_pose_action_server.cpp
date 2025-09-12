@@ -1,4 +1,4 @@
-#include "tms_if_for_opera/zx200_change_pose_action_server.hpp"
+#include "tms_if_for_opera/moveit2/zx200_change_pose_action_server.hpp"
 
 // #include <moveit_msgs/msg/constraints.hpp>
 // #include <moveit_msgs/msg/orientation_constraint.hpp>
@@ -11,6 +11,7 @@
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <fstream>
 #include <sstream>
+using std::cout;
 
 using namespace tms_if_for_opera;
 
@@ -54,7 +55,7 @@ Zx200ChangePoseActionServer::Zx200ChangePoseActionServer(const rclcpp::NodeOptio
   using namespace std::placeholders;
 
   action_server_ = rclcpp_action::create_server<Zx200ChangePose>(
-      this, "tms_rp_zx200_change_pose_plan", std::bind(&Zx200ChangePoseActionServer::handle_goal, this, _1, _2),
+      this, "tms_rp_zx200_change_pose", std::bind(&Zx200ChangePoseActionServer::handle_goal, this, _1, _2),
       std::bind(&Zx200ChangePoseActionServer::handle_cancel, this, _1),
       std::bind(&Zx200ChangePoseActionServer::handle_accepted, this, _1));
   /****/
@@ -156,6 +157,7 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
       planning_scene_msg.link_padding.push_back(padding_msg);
   }
   planning_scene_interface_.applyPlanningScene(planning_scene_msg);
+  RCLCPP_INFO(this->get_logger(), "Planning scene applied with link padding.");
 
   // Clear constraints
   // move_group_->clearPathConstraints();
@@ -183,6 +185,7 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
   if (goal->trajectory.points.size() > 0 && goal->pose_sequence.size() == 0 &&
       goal->position_with_angle_sequence.size() == 0)
   {
+    RCLCPP_INFO(this->get_logger(), "Entered trajectory-based planning block.");
     for (const auto& point : goal->trajectory.points)
     {
       std::map<std::string, double> target_joint_values;
@@ -198,6 +201,12 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
         }
       }
       move_group_->setJointValueTarget(target_joint_values);
+
+      // target_joint_valuesの中身を表示
+      // for (size_t i = 0; i < target_joint_values.size() && i < joint_names_.size(); ++i)
+      // {
+      //   RCLCPP_INFO(this->get_logger(), "Joint: %s, Value: %f", joint_names_[i].c_str(), target_joint_values[i]);
+      // }
 
       feedback->state = "PLANNING";
       goal_handle->publish_feedback(feedback);
@@ -222,6 +231,7 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
   else if (goal->pose_sequence.size() > 0 && goal->trajectory.points.size() == 0 &&
            goal->position_with_angle_sequence.size() == 0)
   {
+    RCLCPP_INFO(this->get_logger(), "Entered pose-sequence-based planning block.");
     for (const auto& pose : goal->pose_sequence)
     {
       move_group_->setPoseTarget(pose);
@@ -249,6 +259,7 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
   else if (goal->position_with_angle_sequence.size() > 0 && goal->trajectory.points.size() == 0 &&
            goal->pose_sequence.size() == 0)
   {
+    RCLCPP_INFO(this->get_logger(), "Entered position-with-angle-sequence-based planning block.");
     for (const auto& point : goal->position_with_angle_sequence)
     {
       // Get end effector pose to use pose/position constraint
@@ -262,6 +273,12 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
         break;
       }
 
+      // target_joint_valuesの中身を表示
+      // target_joint_valuesの中身を表示
+      for (size_t i = 0; i < target_joint_values.size(); ++i){
+        RCLCPP_INFO(this->get_logger(), "Joint: %s, Value: %f", joint_names_[i].c_str(), target_joint_values[i]);
+      }
+      
       // // Set pose constraint
       // // Check if constraint exists
       // if (goal->constraints.joint_constraints.empty() && goal->constraints.position_constraints.empty() &&
@@ -305,28 +322,27 @@ void Zx200ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleZx200C
 
       feedback->state = "PLANNING";
       goal_handle->publish_feedback(feedback);
-      result->error_code.val = 1;
 
-      // if (move_group_->move() == moveit::planning_interface::MoveItErrorCode::SUCCESS)
-      // {
-      //   feedback->state = "SUCCEEDED";
-      //   goal_handle->publish_feedback(feedback);
-      //   result->error_code.val = 1;
-      //   // goal_handle->succeed(result);
-      // }
-      // else
-      // {  // Failed
-      //   feedback->state = "ABORTED";
-      //   goal_handle->publish_feedback(feedback);
-      //   result->error_code.val = 9999;
+      if (move_group_->move() == moveit::planning_interface::MoveItErrorCode::SUCCESS)
+      {
+        feedback->state = "SUCCEEDED";
+        goal_handle->publish_feedback(feedback);
+        result->error_code.val = 1;
+        // goal_handle->succeed(result);
+      }
+      else
+      {  // Failed
+        feedback->state = "ABORTED";
+        goal_handle->publish_feedback(feedback);
+        result->error_code.val = 9999;
 
-      //   break;
-      // }
+        break;
+      }
     }
   }
   else
   {
-    RCLCPP_INFO(this->get_logger(), "No or too much input.");
+    RCLCPP_INFO(this->get_logger(), "Entered invalid input block.");
     feedback->state = "ABORTED";
     goal_handle->publish_feedback(feedback);
     result->error_code.val = 9999;
