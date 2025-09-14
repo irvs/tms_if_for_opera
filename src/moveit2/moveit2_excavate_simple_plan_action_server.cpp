@@ -27,10 +27,8 @@ Moveit2ExcavateSimpleActionServer::Moveit2ExcavateSimpleActionServer(const rclcp
   this->get_parameter("planning_group", planning_group_);
   RCLCPP_INFO(this->get_logger(), "Planning group: %s", planning_group_.c_str());
 
-  this->declare_parameter<std::string>("namespace", "");
-  std::string namespace_param;
-  this->get_parameter("namespace", namespace_param);
-  RCLCPP_INFO(this->get_logger(), "Namespace: %s", namespace_param.c_str());
+  std::string namespace_param = this->get_namespace();
+  RCLCPP_INFO(this->get_logger(), "Node namespace: %s", namespace_param.c_str());
 
   this->declare_parameter<std::string>("collision_object_record_name", "");
   this->get_parameter("collision_object_record_name", collision_object_record_name_);

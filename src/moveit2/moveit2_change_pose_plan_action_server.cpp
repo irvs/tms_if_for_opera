@@ -15,7 +15,7 @@
 using namespace tms_if_for_opera;
 
 Moveit2ChangePoseActionServer::Moveit2ChangePoseActionServer(const rclcpp::NodeOptions& options)
-  : Node("tms_if_for_opera_moveit2_change_pose", options)
+  : Node("tms_if_for_opera_moveit2_change_pose_plan", options)
 {
   this->declare_parameter<std::string>("robot_description", "");
   this->get_parameter("robot_description", robot_description_);
@@ -26,10 +26,9 @@ Moveit2ChangePoseActionServer::Moveit2ChangePoseActionServer(const rclcpp::NodeO
   this->get_parameter("planning_group", planning_group_);
   RCLCPP_INFO(this->get_logger(), "Planning group: %s", planning_group_.c_str());
 
-  this->declare_parameter<std::string>("namespace", "");
-  std::string namespace_param;
-  this->get_parameter("namespace", namespace_param);
-  RCLCPP_INFO(this->get_logger(), "Namespace: %s", namespace_param.c_str());
+  // ノードのnamespaceを取得
+  std::string namespace_param = this->get_namespace();
+  RCLCPP_INFO(this->get_logger(), "Node namespace: %s", namespace_param.c_str());
 
   this->declare_parameter<std::string>("collision_object_record_name", "");
   this->get_parameter("collision_object_record_name", collision_object_record_name_);

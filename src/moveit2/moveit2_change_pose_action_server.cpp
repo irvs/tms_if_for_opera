@@ -27,10 +27,8 @@ Moveit2ChangePoseActionServer::Moveit2ChangePoseActionServer(const rclcpp::NodeO
   this->get_parameter("planning_group", planning_group_);
   RCLCPP_INFO(this->get_logger(), "Planning group: %s", planning_group_.c_str());
 
-  this->declare_parameter<std::string>("namespace", "");
-  std::string namespace_param;
-  this->get_parameter("namespace", namespace_param);
-  RCLCPP_INFO(this->get_logger(), "Namespace: %s", namespace_param.c_str());
+  std::string namespace_param = this->get_namespace();
+  RCLCPP_INFO(this->get_logger(), "Node namespace: %s", namespace_param.c_str());
 
   this->declare_parameter<std::string>("collision_object_record_name", "");
   this->get_parameter("collision_object_record_name", collision_object_record_name_);
@@ -60,7 +58,7 @@ Moveit2ChangePoseActionServer::Moveit2ChangePoseActionServer(const rclcpp::NodeO
   using namespace std::placeholders;
 
   action_server_ = rclcpp_action::create_server<ExcavatorChangePose>(
-      this, "tms_rp_moveit2_change_pose", std::bind(&Moveit2ChangePoseActionServer::handle_goal, this, _1, _2),
+      this, "tms_rp_excavator_change_pose", std::bind(&Moveit2ChangePoseActionServer::handle_goal, this, _1, _2),
       std::bind(&Moveit2ChangePoseActionServer::handle_cancel, this, _1),
       std::bind(&Moveit2ChangePoseActionServer::handle_accepted, this, _1));
   /****/
