@@ -12,12 +12,12 @@ endif()
 
 # MoveIt2関連のターゲット
 set(MOVEIT2_TARGETS
-  zx200_change_pose_action_server
-  zx200_change_pose_plan_action_server
-  zx200_excavate_simple_action_server
-  zx200_excavate_simple_plan_action_server
-  zx200_release_simple_action_server
-  collision_updater
+  moveit2_change_pose_action_server
+  moveit2_change_pose_plan_action_server
+  moveit2_excavate_simple_action_server
+  moveit2_excavate_simple_plan_action_server
+  moveit2_release_simple_action_server
+  scene_manager
 )
 
 # Navigation2関連のターゲット

@@ -1,30 +1,36 @@
-#include "tms_if_for_opera/moveit2/zx200_release_simple_action_server.hpp"
+#include "tms_if_for_opera/moveit2/moveit2_change_pose_action_server.hpp"
 
 // #include <moveit_msgs/msg/constraints.hpp>
 // #include <moveit_msgs/msg/orientation_constraint.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-#include <sstream>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
 #include <urdf/model.h>
 #include <geometric_shapes/shape_operations.h>
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <fstream>
+#include <sstream>
+using std::cout;
 
 using namespace tms_if_for_opera;
 
-Zx200ReleaseSimpleActionServer::Zx200ReleaseSimpleActionServer(const rclcpp::NodeOptions& options)
-  : Node("tms_if_for_opera_zx200_release_simple", options)
+Moveit2ChangePoseActionServer::Moveit2ChangePoseActionServer(const rclcpp::NodeOptions& options)
+  : Node("tms_if_for_opera_moveit2_change_pose", options)
 {
   this->declare_parameter<std::string>("robot_description", "");
   this->get_parameter("robot_description", robot_description_);
   RCLCPP_INFO(this->get_logger(), "Robot description: %s", robot_description_.c_str());
-  // excavator_ik_.loadURDF(robot_description_);
+  excavator_ik_.loadURDF(robot_description_);
 
   this->declare_parameter<std::string>("planning_group", "");
   this->get_parameter("planning_group", planning_group_);
   RCLCPP_INFO(this->get_logger(), "Planning group: %s", planning_group_.c_str());
+
+  this->declare_parameter<std::string>("namespace", "");
+  std::string namespace_param;
+  this->get_parameter("namespace", namespace_param);
+  RCLCPP_INFO(this->get_logger(), "Namespace: %s", namespace_param.c_str());
 
   this->declare_parameter<std::string>("collision_object_record_name", "");
   this->get_parameter("collision_object_record_name", collision_object_record_name_);
@@ -53,10 +59,10 @@ Zx200ReleaseSimpleActionServer::Zx200ReleaseSimpleActionServer(const rclcpp::Nod
   RCLCPP_INFO(this->get_logger(), "Create server.");  // debug
   using namespace std::placeholders;
 
-  action_server_ = rclcpp_action::create_server<Zx200ReleaseSimple>(
-      this, "tms_rp_zx200_release_simple", std::bind(&Zx200ReleaseSimpleActionServer::handle_goal, this, _1, _2),
-      std::bind(&Zx200ReleaseSimpleActionServer::handle_cancel, this, _1),
-      std::bind(&Zx200ReleaseSimpleActionServer::handle_accepted, this, _1));
+  action_server_ = rclcpp_action::create_server<ExcavatorChangePose>(
+      this, "tms_rp_moveit2_change_pose", std::bind(&Moveit2ChangePoseActionServer::handle_goal, this, _1, _2),
+      std::bind(&Moveit2ChangePoseActionServer::handle_cancel, this, _1),
+      std::bind(&Moveit2ChangePoseActionServer::handle_accepted, this, _1));
   /****/
 
   /* Setup movegroup interface */
@@ -69,15 +75,13 @@ Zx200ReleaseSimpleActionServer::Zx200ReleaseSimpleActionServer(const rclcpp::Nod
   std::thread([this]() { executor_.spin(); }).detach();
 
   // move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, planning_group_);
-  move_group_options_ = std::make_shared<moveit::planning_interface::MoveGroupInterface::Options>(planning_group_, "robot_description", "/zx200");
-  move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, *move_group_options_); 
-  
-  // moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
+  move_group_options_ = std::make_shared<moveit::planning_interface::MoveGroupInterface::Options>(planning_group_, "robot_description", namespace_param);
+  move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, *move_group_options_);
 
   move_group_->setMaxVelocityScalingFactor(1.0);
   move_group_->setMaxAccelerationScalingFactor(1.0);
-  move_group_->setNumPlanningAttempts(10);
-  move_group_->setPlanningTime(10.0);
+  move_group_->setNumPlanningAttempts(100);
+  move_group_->setPlanningTime(60.0);
   move_group_->setPlannerId("RRTConnectkConfigDefault");
 
   // Get robot info
@@ -90,11 +94,11 @@ Zx200ReleaseSimpleActionServer::Zx200ReleaseSimpleActionServer(const rclcpp::Nod
   mongocxx::instance instance{};
 
   // For emg stop
-  this->emg_stop_publisher_ = this->create_publisher<std_msgs::msg::Bool>("/zx200/emg_stop", 10);
+  this->emg_stop_publisher_ = this->create_publisher<std_msgs::msg::Bool>("emg_stop", 10);
 }
 
-rclcpp_action::GoalResponse Zx200ReleaseSimpleActionServer::handle_goal(
-    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const Zx200ReleaseSimple::Goal> goal)
+rclcpp_action::GoalResponse Moveit2ChangePoseActionServer::handle_goal(const rclcpp_action::GoalUUID& uuid,
+                                                                     std::shared_ptr<const ExcavatorChangePose::Goal> goal)
 {
   RCLCPP_INFO(this->get_logger(), "Received goal request");
   (void)uuid;
@@ -102,9 +106,9 @@ rclcpp_action::GoalResponse Zx200ReleaseSimpleActionServer::handle_goal(
 }
 
 rclcpp_action::CancelResponse
-Zx200ReleaseSimpleActionServer::handle_cancel(const std::shared_ptr<GoalHandleZx200ReleaseSimple> goal_handle)
+Moveit2ChangePoseActionServer::handle_cancel(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
 {
-  RCLCPP_INFO(this->get_logger(), "Publishing EMG stop signal to ZX200.");
+  RCLCPP_INFO(this->get_logger(), "Publishing EMG stop signal to Moveit2.");
 
   // 実機用非常停止
   std_msgs::msg::Bool msg;
@@ -113,20 +117,21 @@ Zx200ReleaseSimpleActionServer::handle_cancel(const std::shared_ptr<GoalHandleZx
   // move_group停止
   move_group_->stop();
 
-  // auto result = std::make_shared<Zx200ReleaseSimple::Result>();
+  // auto result = std::make_shared<ExcavatorChangePose::Result>();
   // result->error_code.val = 9999;
   // goal_handle->abort(result);
+  return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-void Zx200ReleaseSimpleActionServer::handle_accepted(const std::shared_ptr<GoalHandleZx200ReleaseSimple> goal_handle)
+void Moveit2ChangePoseActionServer::handle_accepted(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
 {
   RCLCPP_INFO(this->get_logger(), "handle_accepted() start.");
   using namespace std::placeholders;
   // this needs to return quickly to avoid blocking the executor, so spin up a new thread
-  std::thread{ std::bind(&Zx200ReleaseSimpleActionServer::execute, this, _1), goal_handle }.detach();
+  std::thread{ std::bind(&Moveit2ChangePoseActionServer::execute, this, _1), goal_handle }.detach();
 }
 
-void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx200ReleaseSimple> goal_handle)
+void Moveit2ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
 {
   // Apply collision object
   apply_collision_objects_from_db(collision_object_record_name_);
@@ -157,6 +162,7 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
       planning_scene_msg.link_padding.push_back(padding_msg);
   }
   planning_scene_interface_.applyPlanningScene(planning_scene_msg);
+  RCLCPP_INFO(this->get_logger(), "Planning scene applied with link padding.");
 
   // Clear constraints
   // move_group_->clearPathConstraints();
@@ -165,8 +171,8 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
   RCLCPP_INFO(this->get_logger(), "Executing goal");
 
   const auto goal = goal_handle->get_goal();
-  auto feedback = std::make_shared<Zx200ReleaseSimple::Feedback>();
-  auto result = std::make_shared<Zx200ReleaseSimple::Result>();
+  auto feedback = std::make_shared<ExcavatorChangePose::Feedback>();
+  auto result = std::make_shared<ExcavatorChangePose::Result>();
 
   feedback->state = "IDLE";
   goal_handle->publish_feedback(feedback);
@@ -179,158 +185,173 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
     // target_joint_values_[joint_names_[i]] = joint_values[i];
   }
 
-  // Constraints
-  std::string target_joint = "swing_joint";
-  auto it = std::find(joint_names_.begin(), joint_names_.end(), target_joint);
-  if (it == joint_names_.end())
+  // Planning
+  // TODO: Fix to connect wayponts smoothly
+  if (goal->trajectory.points.size() > 0 && goal->pose_sequence.size() == 0 &&
+      goal->position_with_angle_sequence.size() == 0)
   {
-      RCLCPP_ERROR(rclcpp::get_logger("move_with_constraint"), "Joint %s not found!", target_joint.c_str());
-      return;
-  }
-  size_t joint_index = std::distance(joint_names_.begin(), it);
-  moveit_msgs::msg::Constraints constraints;
-  moveit_msgs::msg::JointConstraint joint_constraint;
-  joint_constraint.joint_name = target_joint;
-  joint_constraint.position = joint_values[joint_index];
-  joint_constraint.tolerance_above = 0.1;
-  joint_constraint.tolerance_below = 0.1;
-  joint_constraint.weight = 1.0;
-  constraints.joint_constraints.push_back(joint_constraint);
-  move_group_->setPathConstraints(constraints);
+    RCLCPP_INFO(this->get_logger(), "Entered trajectory-based planning block.");
+    for (const auto& point : goal->trajectory.points)
+    {
+      std::map<std::string, double> target_joint_values;
+      for (size_t i = 0; i < goal->trajectory.joint_names.size() && i < point.positions.size(); ++i)
+      {
+        if (fabs(point.positions[i]) > 2.0 * M_PI)
+        {
+          target_joint_values[goal->trajectory.joint_names[i]] = current_joint_values_[goal->trajectory.joint_names[i]];
+        }
+        else
+        {
+          target_joint_values[goal->trajectory.joint_names[i]] = point.positions[i];
+        }
+      }
+      move_group_->setJointValueTarget(target_joint_values);
 
-  std::vector<moveit::planning_interface::MoveGroupInterface::Plan> plans;
-  std::vector<std::vector<double>> joint_targets;
+      // target_joint_valuesの中身を表示
+      // for (size_t i = 0; i < target_joint_values.size() && i < joint_names_.size(); ++i)
+      // {
+      //   RCLCPP_INFO(this->get_logger(), "Joint: %s, Value: %f", joint_names_[i].c_str(), target_joint_values[i]);
+      // }
 
-  // Set target joint values
-  std::vector<double> target_joint_values(joint_names_.size(), 0.0);
-  for (size_t i = 0; i < joint_names_.size(); i++) {
-    target_joint_values[i] = current_joint_values_[joint_names_[i]];
-  }
+      feedback->state = "PLANNING";
+      goal_handle->publish_feedback(feedback);
 
-  for (size_t i = 0; i < joint_names_.size(); i++) {
-    if (joint_names_[i] == "bucket_joint") {
-      target_joint_values[i] = (joint_values[i] - 0.34) / 2.0;  // バケットの目標角度を設定1
+      if (move_group_->move() == moveit::planning_interface::MoveItErrorCode::SUCCESS)
+      {
+        feedback->state = "SUCCEEDED";
+        goal_handle->publish_feedback(feedback);
+        result->error_code.val = 1;
+        // goal_handle->succeed(result);
+      }
+      else
+      {  // Failed
+        feedback->state = "ABORTED";
+        goal_handle->publish_feedback(feedback);
+        result->error_code.val = 9999;
+
+        break;
+      }
     }
   }
+  else if (goal->pose_sequence.size() > 0 && goal->trajectory.points.size() == 0 &&
+           goal->position_with_angle_sequence.size() == 0)
+  {
+    RCLCPP_INFO(this->get_logger(), "Entered pose-sequence-based planning block.");
+    for (const auto& pose : goal->pose_sequence)
+    {
+      move_group_->setPoseTarget(pose);
 
-  joint_targets.push_back(target_joint_values);
+      feedback->state = "PLANNING";
+      goal_handle->publish_feedback(feedback);
 
-  for (size_t i = 0; i < joint_names_.size(); i++) {
-    if (joint_names_[i] == "arm_joint") {
-      target_joint_values[i] += 0.1;
-    } else if (joint_names_[i] == "bucket_joint") {
-      target_joint_values[i] = -0.34;
-    } else if (joint_names_[i] == "boom_joint") {
-      target_joint_values[i] -= 0.15;  // boom_joint の目標角度を調整
+      if (move_group_->move() == moveit::planning_interface::MoveItErrorCode::SUCCESS)
+      {
+        feedback->state = "SUCCEEDED";
+        goal_handle->publish_feedback(feedback);
+        result->error_code.val = 1;
+        // goal_handle->succeed(result);
+      }
+      else
+      {  // Failed
+        feedback->state = "ABORTED";
+        goal_handle->publish_feedback(feedback);
+        result->error_code.val = 9999;
+
+        break;
+      }
     }
   }
-  joint_targets.push_back(target_joint_values);
+  else if (goal->position_with_angle_sequence.size() > 0 && goal->trajectory.points.size() == 0 &&
+           goal->pose_sequence.size() == 0)
+  {
+    RCLCPP_INFO(this->get_logger(), "Entered position-with-angle-sequence-based planning block.");
+    for (const auto& point : goal->position_with_angle_sequence)
+    {
+      // Get end effector pose to use pose/position constraint
+      std::vector<double> target_joint_values(joint_names_.size(), 0.0);
+      if (excavator_ik_.inverseKinematics4Dof(point.position.x, point.position.y, point.position.z, point.theta_w,
+                                              target_joint_values) == -1)
+      {
+        RCLCPP_INFO(this->get_logger(), "Failed to calculate inverse kinematics");
+        feedback->state = "ABORTED";
+        result->error_code.val = 9999;
+        break;
+      }
 
-  moveit::core::RobotState start_state(*move_group_->getCurrentState());
-    
-  bool planning_success = true;
-  
-  for (const auto& joints : joint_targets) {
-    move_group_->setStartState(start_state);
-    move_group_->setJointValueTarget(joints);
-  
-    moveit::planning_interface::MoveGroupInterface::Plan plan;
-    if (move_group_->plan(plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS) {
-      RCLCPP_ERROR(this->get_logger(), "Failed to plan to one of the waypoints");
-      planning_success = false;
-      break;
+      // target_joint_valuesの中身を表示
+      // target_joint_valuesの中身を表示
+      for (size_t i = 0; i < target_joint_values.size(); ++i){
+        RCLCPP_INFO(this->get_logger(), "Joint: %s, Value: %f", joint_names_[i].c_str(), target_joint_values[i]);
+      }
+      
+      // // Set pose constraint
+      // // Check if constraint exists
+      // if (goal->constraints.joint_constraints.empty() && goal->constraints.position_constraints.empty() &&
+      //     goal->constraints.orientation_constraints.empty() && goal->constraints.visibility_constraints.empty())
+      // {
+      //   RCLCPP_INFO(this->get_logger(), "Constraints do not exist");
+      // }
+      // else
+      // {
+      //   RCLCPP_INFO(this->get_logger(), "Constraints exist");
+
+      //   // TODO: Add error handling
+      //   //       - Use constraint in joint space
+      //   //       - Constraint is not for end effector
+      //   if (goal->constraints.orientation_constraints.size() > 0)
+      //   {
+      //     RCLCPP_INFO(this->get_logger(), "Orientation constraint exists");
+      //     auto current_pose = move_group_->getCurrentPose();
+      //     moveit_msgs::msg::Constraints pose_constraints;
+      //     moveit_msgs::msg::OrientationConstraint ocm;
+      //     ocm.header.frame_id = move_group_->getPoseReferenceFrame();  // Replace with your base link name
+      //     ocm.link_name = move_group_->getEndEffectorLink();
+      //     // Specify the desired orientation
+      //     ocm.orientation = current_pose.pose.orientation;
+      //     ocm.absolute_x_axis_tolerance = goal->constraints.orientation_constraints[0].absolute_x_axis_tolerance;
+      //     ocm.absolute_y_axis_tolerance = goal->constraints.orientation_constraints[0].absolute_y_axis_tolerance;
+      //     ocm.absolute_z_axis_tolerance = goal->constraints.orientation_constraints[0].absolute_z_axis_tolerance;
+      //     ocm.weight = goal->constraints.orientation_constraints[0].weight;
+      //     pose_constraints.orientation_constraints.emplace_back(ocm);
+      //     move_group_->setPathConstraints(pose_constraints);
+      //   }
+      // }
+
+      // Set target pose
+      // robot_state_->setJointGroupPositions(move_group_->getName(), target_joint_values);
+      // robot_state_->update();
+      // Eigen::Isometry3d end_effector_state = robot_state_->getGlobalLinkTransform(move_group_->getEndEffectorLink());
+      // move_group_->setPoseTarget(end_effector_state);
+
+      move_group_->setJointValueTarget(target_joint_values);
+
+      feedback->state = "PLANNING";
+      goal_handle->publish_feedback(feedback);
+
+      if (move_group_->move() == moveit::planning_interface::MoveItErrorCode::SUCCESS)
+      {
+        feedback->state = "SUCCEEDED";
+        goal_handle->publish_feedback(feedback);
+        result->error_code.val = 1;
+        // goal_handle->succeed(result);
+      }
+      else
+      {  // Failed
+        feedback->state = "ABORTED";
+        goal_handle->publish_feedback(feedback);
+        result->error_code.val = 9999;
+
+        break;
+      }
     }
-  
-    plans.push_back(plan);  // 成功したら保持
-  
-    // 次の出発点を更新（まだexecuteしてないけど、stateは変える）
-    start_state.setJointGroupPositions(
-      move_group_->getRobotModel()->getJointModelGroup(move_group_->getName()), joints);
-    start_state.update();
   }
-  
-  if (!planning_success) {
-    RCLCPP_WARN(this->get_logger(), "Aborting execution due to planning failure.");
-    result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
-    goal_handle->abort(result);
-    return;
+  else
+  {
+    RCLCPP_INFO(this->get_logger(), "Entered invalid input block.");
+    feedback->state = "ABORTED";
+    goal_handle->publish_feedback(feedback);
+    result->error_code.val = 9999;
   }
-
-  // // まず空のRobotTrajectoryを作る
-  // robot_trajectory::RobotTrajectory full_traj(move_group_->getRobotModel(), move_group_->getName());
-
-  // // 各planのtrajectoryをappend
-  // for (const auto& plan : plans) {
-  //   // plan.trajectory_ は moveit_msgs::msg::RobotTrajectory 型
-  //   robot_trajectory::RobotTrajectory part_traj(move_group_->getRobotModel(), move_group_->getName());
-  //   part_traj.setRobotTrajectoryMsg(*move_group_->getCurrentState(), plan.trajectory_);
-
-  //   // append: (traj, 時間オフセット)
-  //   full_traj.append(part_traj, 0.0); // 0.0なら連続して連結
-  // }
-  // trajectory_processing::IterativeParabolicTimeParameterization iptp;
-  // iptp.computeTimeStamps(full_traj);
-
-  // moveit::planning_interface::MoveGroupInterface::Plan full_plan;
-  // full_traj.getRobotTrajectoryMsg(full_plan.trajectory_);
-
-
-
-  // Execute
-  bool all_success = true;
-  // 成功した場合、順番に実行
-  for (const auto& plan : plans) {
-    moveit::core::MoveItErrorCode exec_result = move_group_->execute(plan);
-  
-    if (exec_result == moveit::core::MoveItErrorCode::SUCCESS) {
-      continue;  // 正常に完了
-    } else {
-      RCLCPP_ERROR(this->get_logger(), "Execution failed with error code: %d", exec_result.val);
-      result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
-      goal_handle->abort(result);
-      return;
-    }
-  }
-
-  if (all_success) {
-    RCLCPP_INFO(this->get_logger(), "All trajectories executed successfully.");
-    result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::SUCCEEDED);
-    goal_handle->succeed(result);
-    return;
-  }
-
-  // Set target joint values
-  // std::map<std::string, double> target_joint_values;
-  // target_joint_values = current_joint_values_;
-  // target_joint_values["bucket_joint"] = goal->target_angle;
-  // move_group_->setJointValueTarget(target_joint_values);
-
-  // // Plan
-  // feedback->state = "PLANNING";
-  // goal_handle->publish_feedback(feedback);
-  // moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-  // if (move_group_->plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
-  // {
-  //   feedback->state = "ABORTED";
-  //   goal_handle->publish_feedback(feedback);
-  //   result->error_code.val = 9999;
-  // }
-
-  // // Execute
-  // feedback->state = "EXECUTING";
-  // goal_handle->publish_feedback(feedback);
-  // if (move_group_->execute(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS)
-  // {
-  //   feedback->state = "SUCCEEDED";
-  //   goal_handle->publish_feedback(feedback);
-  //   result->error_code.val = 1;
-  // }
-  // else
-  // {
-  //   feedback->state = "ABORTED";
-  //   goal_handle->publish_feedback(feedback);
-  //   result->error_code.val = 9999;
-  // }
 
   // If execution was successful, set the result of the action and mark it as succeeded.
   if (result->error_code.val == 1)
@@ -343,12 +364,9 @@ void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx2
     RCLCPP_INFO(this->get_logger(), "Goal aborted");
     goal_handle->abort(result);
   }
-
-  // 制約を解除
-  move_group_->clearPathConstraints();
 }
 
-void Zx200ReleaseSimpleActionServer::apply_collision_objects_from_db(const std::string& record_name)
+void Moveit2ChangePoseActionServer::apply_collision_objects_from_db(const std::string& record_name)
 {
   // Load collision objects from DB
   // RCLCPP_INFO(this->get_logger(), "Loading collision objects from DB");
@@ -427,7 +445,7 @@ void Zx200ReleaseSimpleActionServer::apply_collision_objects_from_db(const std::
   }
 }
 
-void Zx200ReleaseSimpleActionServer::apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names)
+void Moveit2ChangePoseActionServer::apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names)
 {
   for (const auto& record_name : record_names)
   {
@@ -496,7 +514,7 @@ void Zx200ReleaseSimpleActionServer::apply_collision_objects_mesh_from_db(const 
   }
 }
 
-double Zx200ReleaseSimpleActionServer::getDoubleValue(const bsoncxx::document::element& element)
+double Moveit2ChangePoseActionServer::getDoubleValue(const bsoncxx::document::element& element)
 {
   if (element.type() == bsoncxx::type::k_double)
   {
@@ -515,7 +533,7 @@ double Zx200ReleaseSimpleActionServer::getDoubleValue(const bsoncxx::document::e
 int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<Zx200ReleaseSimpleActionServer>());
+  rclcpp::spin(std::make_shared<Moveit2ChangePoseActionServer>());
   rclcpp::shutdown();
   return 0;
 }

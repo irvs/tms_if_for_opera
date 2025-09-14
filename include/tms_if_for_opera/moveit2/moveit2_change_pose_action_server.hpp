@@ -1,5 +1,5 @@
-#ifndef ZX200_CHANGE_POSE_ACTION_SERVER_HPP_
-#define ZX200_CHANGE_POSE_ACTION_SERVER_HPP_
+#ifndef MOVEIT2_CHANGE_POSE_ACTION_SERVER_HPP_
+#define MOVEIT2_CHANGE_POSE_ACTION_SERVER_HPP_
 
 #include <functional>
 #include <memory>
@@ -11,7 +11,7 @@
 // #include "shape_msgs/msg/solid_primitive.hpp"
 // #include "rclcpp_components/register_node_macro.hpp"
 
-#include "tms_msg_rp/action/tms_rp_zx200_change_pose.hpp"
+#include "tms_msg_rp/action/tms_rp_excavator_change_pose.hpp"
 
 /** Moveit! **/
 #include <moveit/move_group_interface/move_group_interface.h>
@@ -46,13 +46,13 @@
 
 namespace tms_if_for_opera
 {
-class Zx200ChangePoseActionServer : public rclcpp::Node
+class Moveit2ChangePoseActionServer : public rclcpp::Node
 {
 public:
-  using Zx200ChangePose = tms_msg_rp::action::TmsRpZx200ChangePose;
-  using GoalHandleZx200ChangePose = rclcpp_action::ServerGoalHandle<Zx200ChangePose>;
+  using ExcavatorChangePose = tms_msg_rp::action::TmsRpExcavatorChangePose;
+  using GoalHandleExcavatorChangePose = rclcpp_action::ServerGoalHandle<ExcavatorChangePose>;
 
-  explicit Zx200ChangePoseActionServer(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
+  explicit Moveit2ChangePoseActionServer(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
 
 private:
   std::string planning_group_;
@@ -60,7 +60,7 @@ private:
   std::string collision_object_record_name_;
   std::vector<std::string> collision_object_dump_record_name_;
 
-  rclcpp_action::Server<Zx200ChangePose>::SharedPtr action_server_;
+  rclcpp_action::Server<ExcavatorChangePose>::SharedPtr action_server_;
   rclcpp::Node::SharedPtr move_group_node_;
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface::Options> move_group_options_;
@@ -83,10 +83,10 @@ private:
   std::map<std::string, rclcpp::Subscription<std_msgs::msg::String>::SharedPtr> robot_description_subs_;
 
   rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID& uuid,
-                                          std::shared_ptr<const Zx200ChangePose::Goal> goal);
-  rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandleZx200ChangePose> goal_handle);
-  void handle_accepted(const std::shared_ptr<GoalHandleZx200ChangePose> goal_handle);
-  void execute(const std::shared_ptr<GoalHandleZx200ChangePose> goal_handle);
+                                          std::shared_ptr<const ExcavatorChangePose::Goal> goal);
+  rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle);
+  void handle_accepted(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle);
+  void execute(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle);
 
   void apply_collision_objects_from_db(const std::string& record_name);
   void apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names);
@@ -99,4 +99,4 @@ private:
 };
 }  // namespace tms_if_for_opera
 
-#endif  // ZX200_CHANGE_POSE_ACTION_SERVER_HPP_
+#endif  // MOVEIT2_CHANGE_POSE_ACTION_SERVER_HPP_
