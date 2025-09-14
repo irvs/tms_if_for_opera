@@ -22,7 +22,7 @@ set(MOVEIT2_TARGETS
 
 # Navigation2関連のターゲット
 set(NAVIGATION2_TARGETS
-
+  navigation2_navigate_through_poses
 )
 
 # その他のターゲット
@@ -42,6 +42,7 @@ find_package(rosidl_default_runtime REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
 find_package(bsoncxx REQUIRED)
 find_package(mongocxx REQUIRED)
+find_package(nav2_msgs REQUIRED)
 
 add_library(excavator_ik SHARED src/excavator_ik.cpp)
 ament_target_dependencies(excavator_ik rclcpp urdf)
@@ -55,6 +56,8 @@ set(COMMON_DEPENDENCIES
   "std_msgs"
   "tf2"
   "tf2_geometry_msgs"
+
+  "nav2_msgs"
   
   "Boost"
   "mongocxx"
