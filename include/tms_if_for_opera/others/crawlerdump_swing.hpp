@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef NAVIGATION2_NAVIGATE_THROUGH_POSES_HPP
-#define NAVIGATION2_NAVIGATE_THROUGH_POSES_HPP
+#ifndef CRAWLERDUMP_SWING_HPP
+#define CRAWLERDUMP_SWING_HPP
 
 #include <memory>
 #include <map>
@@ -31,22 +31,24 @@
 #include "std_msgs/msg/float64.hpp"
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
-#include "nav2_msgs/action/navigate_through_poses.hpp"
+#include "tms_msg_rp/action/tms_rp_crawler_dump_swing_angle.hpp"
+#include "com3_msgs/action/set_swing_angle.hpp"
 
 
-class Navigation2NavigateThroughPoses : public rclcpp::Node
+class CrawlerDumpSwing : public rclcpp::Node
 {
 public:
-    using NavigateThroughPoses = nav2_msgs::action::NavigateThroughPoses;
-    using GoalHandle = rclcpp_action::ServerGoalHandle<NavigateThroughPoses>;
-    using GoalHandleNavigateThroughPoses = rclcpp_action::ClientGoalHandle<NavigateThroughPoses>;
-    Navigation2NavigateThroughPoses();
+    using GoalHandle = rclcpp_action::ServerGoalHandle<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle>;
+    using SetSwingAngle = com3_msgs::action::SetSwingAngle;
+    using GoalHandleCrawlerDumpSwing = rclcpp_action::ClientGoalHandle<SetSwingAngle>;
+    CrawlerDumpSwing();
 
 
 private:
-    rclcpp_action::Server<NavigateThroughPoses>::SharedPtr action_server_;
+    rclcpp_action::Server<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle>::SharedPtr action_server_;
+    std::map<std::pair<std::string, std::string>, double> param_from_db_;
     rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID& uuid,
-                                            std::shared_ptr<const NavigateThroughPoses::Goal> goal);
+                                            std::shared_ptr<const tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle::Goal> goal);
     rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandle> goal_handle);
     void handle_accepted(const std::shared_ptr<GoalHandle> goal_handle);
     void execute(const std::shared_ptr<GoalHandle> goal_handle);
@@ -54,14 +56,14 @@ private:
     std::shared_ptr<GoalHandle> current_goal_handle_;
 
     // Member as an action client
-    rclcpp_action::Client<NavigateThroughPoses>::SharedPtr action_client_;
-    std::shared_future<GoalHandleNavigateThroughPoses::SharedPtr> client_future_goal_handle_;
-    std::map<std::pair<std::string, std::string>, double> parameters;
-    void goal_response_callback(const GoalHandleNavigateThroughPoses::SharedPtr& goal_handle);
-    void feedback_callback(GoalHandleNavigateThroughPoses::SharedPtr,
-                            const std::shared_ptr<const NavigateThroughPoses::Feedback> feedback);
+    rclcpp_action::Client<SetSwingAngle>::SharedPtr action_client_;
+    std::shared_future<GoalHandleCrawlerDumpSwing::SharedPtr> client_future_goal_handle_;
+    std::map<std::string, double> parameters;
+    void goal_response_callback(const GoalHandleCrawlerDumpSwing::SharedPtr& goal_handle);
+    void feedback_callback(GoalHandleCrawlerDumpSwing::SharedPtr,
+                            const std::shared_ptr<const SetSwingAngle::Feedback> feedback);
     void result_callback(const std::shared_ptr<GoalHandle> goal_handle,
-                        const GoalHandleNavigateThroughPoses::WrappedResult& result);
+                        const GoalHandleCrawlerDumpSwing::WrappedResult& result);
 };
 
 #endif

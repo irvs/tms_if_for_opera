@@ -13,34 +13,34 @@
 // limitations under the License.
 
 #include <vector>
-#include "tms_if_for_opera/navigation2/navigation2_navigate_through_poses.hpp"
+#include "tms_if_for_opera/navigation2/navigation2_navigate_through_poses_deg.hpp"
 // #include <glog/logging.h>
 
 using std::placeholders::_1;
 using std::placeholders::_2;
 
-Navigation2NavigateThroughPoses::Navigation2NavigateThroughPoses() : rclcpp::Node("tms_if_navigate_through_poses_node")
+Navigation2NavigateThroughPosesDeg::Navigation2NavigateThroughPosesDeg() : rclcpp::Node("tms_if_navigate_through_poses_deg_node")
 {
     this->action_server_ = rclcpp_action::create_server<NavigateThroughPoses>(
-        this, "tms_rp_navigate_through_poses",
-        std::bind(&Navigation2NavigateThroughPoses::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
-        std::bind(&Navigation2NavigateThroughPoses::handle_cancel, this, std::placeholders::_1),
-        std::bind(&Navigation2NavigateThroughPoses::handle_accepted, this, std::placeholders::_1));
+        this, "tms_rp_navigate_through_poses_deg",
+        std::bind(&Navigation2NavigateThroughPosesDeg::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
+        std::bind(&Navigation2NavigateThroughPosesDeg::handle_cancel, this, std::placeholders::_1),
+        std::bind(&Navigation2NavigateThroughPosesDeg::handle_accepted, this, std::placeholders::_1));
 
     
     action_client_ = rclcpp_action::create_client<NavigateThroughPoses>(this, "navigate_through_poses");
 }
 
-rclcpp_action::GoalResponse Navigation2NavigateThroughPoses::handle_goal(
+rclcpp_action::GoalResponse Navigation2NavigateThroughPosesDeg::handle_goal(
     const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const NavigateThroughPoses::Goal> goal)
 {
     RCLCPP_INFO(this->get_logger(), "Received goal request");
     return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
-rclcpp_action::CancelResponse Navigation2NavigateThroughPoses::handle_cancel(const std::shared_ptr<GoalHandle> goal_handle)
+rclcpp_action::CancelResponse Navigation2NavigateThroughPosesDeg::handle_cancel(const std::shared_ptr<GoalHandle> goal_handle)
 {
-    RCLCPP_INFO(this->get_logger(), "Received request to cancel tms_if_navigate_through_poses_node node");
+    RCLCPP_INFO(this->get_logger(), "Received request to cancel tms_if_navigate_through_poses_deg_node node");
     if (client_future_goal_handle_.valid() &&
         client_future_goal_handle_.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
     {
@@ -50,15 +50,15 @@ rclcpp_action::CancelResponse Navigation2NavigateThroughPoses::handle_cancel(con
     return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-void Navigation2NavigateThroughPoses::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
+void Navigation2NavigateThroughPosesDeg::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
 {
     using namespace std::placeholders;
-    std::thread{ std::bind(&Navigation2NavigateThroughPoses::execute, this, _1), goal_handle }.detach();
+    std::thread{ std::bind(&Navigation2NavigateThroughPosesDeg::execute, this, _1), goal_handle }.detach();
 }
 
-void Navigation2NavigateThroughPoses::execute(const std::shared_ptr<GoalHandle> goal_handle)
+void Navigation2NavigateThroughPosesDeg::execute(const std::shared_ptr<GoalHandle> goal_handle)
 {
-    RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_navigate_through_poses_node) is executing...");
+    RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_navigate_through_poses_deg_node) is executing...");
     current_goal_handle_ = goal_handle;
 
     auto result = std::make_shared<NavigateThroughPoses::Result>();
@@ -90,7 +90,7 @@ void Navigation2NavigateThroughPoses::execute(const std::shared_ptr<GoalHandle> 
     client_future_goal_handle_ = action_client_->async_send_goal(goal_msg, send_goal_options);
 }
 
-void Navigation2NavigateThroughPoses::goal_response_callback(const GoalHandleNavigateThroughPoses::SharedPtr& goal_handle)
+void Navigation2NavigateThroughPosesDeg::goal_response_callback(const GoalHandleNavigateThroughPoses::SharedPtr& goal_handle)
 {
   if (!goal_handle)
   {
@@ -103,7 +103,7 @@ void Navigation2NavigateThroughPoses::goal_response_callback(const GoalHandleNav
 }
 
   
-void Navigation2NavigateThroughPoses::feedback_callback(
+void Navigation2NavigateThroughPosesDeg::feedback_callback(
     const GoalHandleNavigateThroughPoses::SharedPtr,
     const std::shared_ptr<const GoalHandleNavigateThroughPoses::Feedback> feedback)
 {
@@ -118,7 +118,7 @@ void Navigation2NavigateThroughPoses::feedback_callback(
 
 
 //result
-void Navigation2NavigateThroughPoses::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
+void Navigation2NavigateThroughPosesDeg::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
                                              const GoalHandleNavigateThroughPoses::WrappedResult& result)
 {
   if (!goal_handle->is_active())
@@ -156,7 +156,7 @@ int main(int argc, char* argv[])
     //   google::InstallFailureSignalHandler();
 
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<Navigation2NavigateThroughPoses>());
+    rclcpp::spin(std::make_shared<Navigation2NavigateThroughPosesDeg>());
     rclcpp::shutdown();
     return 0;
 }

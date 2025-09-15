@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef NAVIGATION2_NAVIGATE_THROUGH_POSES_HPP
-#define NAVIGATION2_NAVIGATE_THROUGH_POSES_HPP
+#ifndef NAVIGATION2_FOLLOW_WAYPOINTS_HPP
+#define NAVIGATION2_FOLLOW_WAYPOINTS_HPP
 
 #include <memory>
 #include <map>
@@ -31,22 +31,22 @@
 #include "std_msgs/msg/float64.hpp"
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
-#include "nav2_msgs/action/navigate_through_poses.hpp"
+#include "nav2_msgs/action/follow_waypoints.hpp"
 
 
-class Navigation2NavigateThroughPoses : public rclcpp::Node
+class Navigation2FollowWaypoints : public rclcpp::Node
 {
 public:
-    using NavigateThroughPoses = nav2_msgs::action::NavigateThroughPoses;
-    using GoalHandle = rclcpp_action::ServerGoalHandle<NavigateThroughPoses>;
-    using GoalHandleNavigateThroughPoses = rclcpp_action::ClientGoalHandle<NavigateThroughPoses>;
-    Navigation2NavigateThroughPoses();
+    using FollowWaypoints = nav2_msgs::action::FollowWaypoints;
+    using GoalHandle = rclcpp_action::ServerGoalHandle<FollowWaypoints>;
+    using GoalHandleFollowWaypoints = rclcpp_action::ClientGoalHandle<FollowWaypoints>;
+    Navigation2FollowWaypoints();
 
 
 private:
-    rclcpp_action::Server<NavigateThroughPoses>::SharedPtr action_server_;
+    rclcpp_action::Server<FollowWaypoints>::SharedPtr action_server_;
     rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID& uuid,
-                                            std::shared_ptr<const NavigateThroughPoses::Goal> goal);
+                                            std::shared_ptr<const FollowWaypoints::Goal> goal);
     rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandle> goal_handle);
     void handle_accepted(const std::shared_ptr<GoalHandle> goal_handle);
     void execute(const std::shared_ptr<GoalHandle> goal_handle);
@@ -54,14 +54,14 @@ private:
     std::shared_ptr<GoalHandle> current_goal_handle_;
 
     // Member as an action client
-    rclcpp_action::Client<NavigateThroughPoses>::SharedPtr action_client_;
-    std::shared_future<GoalHandleNavigateThroughPoses::SharedPtr> client_future_goal_handle_;
+    rclcpp_action::Client<FollowWaypoints>::SharedPtr action_client_;
+    std::shared_future<GoalHandleFollowWaypoints::SharedPtr> client_future_goal_handle_;
     std::map<std::pair<std::string, std::string>, double> parameters;
-    void goal_response_callback(const GoalHandleNavigateThroughPoses::SharedPtr& goal_handle);
-    void feedback_callback(GoalHandleNavigateThroughPoses::SharedPtr,
-                            const std::shared_ptr<const NavigateThroughPoses::Feedback> feedback);
+    void goal_response_callback(const GoalHandleFollowWaypoints::SharedPtr& goal_handle);
+    void feedback_callback(GoalHandleFollowWaypoints::SharedPtr,
+                            const std::shared_ptr<const FollowWaypoints::Feedback> feedback);
     void result_callback(const std::shared_ptr<GoalHandle> goal_handle,
-                        const GoalHandleNavigateThroughPoses::WrappedResult& result);
+                        const GoalHandleFollowWaypoints::WrappedResult& result);
 };
 
 #endif

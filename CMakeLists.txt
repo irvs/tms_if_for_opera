@@ -23,11 +23,18 @@ set(MOVEIT2_TARGETS
 # Navigation2関連のターゲット
 set(NAVIGATION2_TARGETS
   navigation2_navigate_through_poses
+  navigation2_navigate_through_poses_deg
+  navigation2_navigate_anywhere
+  navigation2_navigate_anywhere_deg
+  navigation2_follow_waypoints
+  navigation2_follow_waypoints_deg
 )
 
 # その他のターゲット
 set(OTHERS_TARGETS
-
+  crawlerdump_release_soil
+  crawlerdump_swing
+  crawlerdump_swing_align_to_heading
 )
 
 find_package(ament_cmake REQUIRED)
@@ -43,6 +50,7 @@ find_package(Boost REQUIRED COMPONENTS system)
 find_package(bsoncxx REQUIRED)
 find_package(mongocxx REQUIRED)
 find_package(nav2_msgs REQUIRED)
+find_package(com3_msgs REQUIRED)
 
 add_library(excavator_ik SHARED src/excavator_ik.cpp)
 ament_target_dependencies(excavator_ik rclcpp urdf)
@@ -58,6 +66,7 @@ set(COMMON_DEPENDENCIES
   "tf2_geometry_msgs"
 
   "nav2_msgs"
+  "com3_msgs"
   
   "Boost"
   "mongocxx"
