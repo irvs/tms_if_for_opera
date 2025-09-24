@@ -32,6 +32,11 @@ public:
 
     RCLCPP_INFO(this->get_logger(), "Planning group: %s", planning_group_.c_str());
 
+    this->declare_parameter<std::string>("namespace", "");
+    std::string namespace_param;
+    this->get_parameter("namespace", namespace_param);
+    RCLCPP_INFO(this->get_logger(), "Namespace: %s", namespace_param.c_str());
+
     // TF初期化
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -47,7 +52,7 @@ public:
 
     move_group_options_ =
       std::make_shared<moveit::planning_interface::MoveGroupInterface::Options>(
-        planning_group_, "robot_description", "/zx200");
+        planning_group_, "robot_description", namespace_param);
 
     move_group_ =
       std::make_shared<moveit::planning_interface::MoveGroupInterface>(
