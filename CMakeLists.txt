@@ -15,6 +15,7 @@ set(MOVEIT2_TARGETS
   moveit2_change_pose_action_server
   moveit2_change_pose_plan_action_server
   moveit2_level_action_server
+  moveit2_gather_action_server
   moveit2_excavate_simple_action_server
   moveit2_excavate_simple_plan_action_server
   moveit2_release_simple_action_server
