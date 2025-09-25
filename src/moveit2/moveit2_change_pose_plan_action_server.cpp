@@ -58,7 +58,7 @@ Moveit2ChangePoseActionServer::Moveit2ChangePoseActionServer(const rclcpp::NodeO
   using namespace std::placeholders;
 
   action_server_ = rclcpp_action::create_server<ExcavatorChangePose>(
-      this, "tms_rp_excavator_change_pose_plan", std::bind(&Moveit2ChangePoseActionServer::handle_goal, this, _1, _2),
+      this, "tms_rp_change_pose_plan", std::bind(&Moveit2ChangePoseActionServer::handle_goal, this, _1, _2),
       std::bind(&Moveit2ChangePoseActionServer::handle_cancel, this, _1),
       std::bind(&Moveit2ChangePoseActionServer::handle_accepted, this, _1));
   /****/
