@@ -1,4 +1,4 @@
-#include "tms_if_for_opera/moveit2/moveit2_release_simple_action_server.hpp"
+#include "tms_if_for_opera/zx200_release_simple_action_server.hpp"
 
 // #include <moveit_msgs/msg/constraints.hpp>
 // #include <moveit_msgs/msg/orientation_constraint.hpp>
@@ -14,8 +14,8 @@
 
 using namespace tms_if_for_opera;
 
-Moveit2ReleaseSimpleActionServer::Moveit2ReleaseSimpleActionServer(const rclcpp::NodeOptions& options)
-  : Node("tms_if_for_opera_moveit2_release_simple", options)
+Zx200ReleaseSimpleActionServer::Zx200ReleaseSimpleActionServer(const rclcpp::NodeOptions& options)
+  : Node("tms_if_for_opera_zx200_release_simple", options)
 {
   this->declare_parameter<std::string>("robot_description", "");
   this->get_parameter("robot_description", robot_description_);
@@ -25,9 +25,6 @@ Moveit2ReleaseSimpleActionServer::Moveit2ReleaseSimpleActionServer(const rclcpp:
   this->declare_parameter<std::string>("planning_group", "");
   this->get_parameter("planning_group", planning_group_);
   RCLCPP_INFO(this->get_logger(), "Planning group: %s", planning_group_.c_str());
-
-  std::string namespace_param = this->get_namespace();
-  RCLCPP_INFO(this->get_logger(), "Node namespace: %s", namespace_param.c_str());
 
   this->declare_parameter<std::string>("collision_object_record_name", "");
   this->get_parameter("collision_object_record_name", collision_object_record_name_);
@@ -56,10 +53,10 @@ Moveit2ReleaseSimpleActionServer::Moveit2ReleaseSimpleActionServer(const rclcpp:
   RCLCPP_INFO(this->get_logger(), "Create server.");  // debug
   using namespace std::placeholders;
 
-  action_server_ = rclcpp_action::create_server<ExcavatorReleaseSimple>(
-      this, "tms_rp_excavator_release_simple", std::bind(&Moveit2ReleaseSimpleActionServer::handle_goal, this, _1, _2),
-      std::bind(&Moveit2ReleaseSimpleActionServer::handle_cancel, this, _1),
-      std::bind(&Moveit2ReleaseSimpleActionServer::handle_accepted, this, _1));
+  action_server_ = rclcpp_action::create_server<Zx200ReleaseSimple>(
+      this, "tms_rp_zx200_release_simple", std::bind(&Zx200ReleaseSimpleActionServer::handle_goal, this, _1, _2),
+      std::bind(&Zx200ReleaseSimpleActionServer::handle_cancel, this, _1),
+      std::bind(&Zx200ReleaseSimpleActionServer::handle_accepted, this, _1));
   /****/
 
   /* Setup movegroup interface */
@@ -72,7 +69,7 @@ Moveit2ReleaseSimpleActionServer::Moveit2ReleaseSimpleActionServer(const rclcpp:
   std::thread([this]() { executor_.spin(); }).detach();
 
   // move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, planning_group_);
-  move_group_options_ = std::make_shared<moveit::planning_interface::MoveGroupInterface::Options>(planning_group_, "robot_description", namespace_param);
+  move_group_options_ = std::make_shared<moveit::planning_interface::MoveGroupInterface::Options>(planning_group_, "robot_description", "/zx200");
   move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, *move_group_options_); 
   
   // moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
@@ -93,11 +90,11 @@ Moveit2ReleaseSimpleActionServer::Moveit2ReleaseSimpleActionServer(const rclcpp:
   mongocxx::instance instance{};
 
   // For emg stop
-  this->emg_stop_publisher_ = this->create_publisher<std_msgs::msg::Bool>("emg_stop", 10);
+  this->emg_stop_publisher_ = this->create_publisher<std_msgs::msg::Bool>("/zx200/emg_stop", 10);
 }
 
-rclcpp_action::GoalResponse Moveit2ReleaseSimpleActionServer::handle_goal(
-    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const ExcavatorReleaseSimple::Goal> goal)
+rclcpp_action::GoalResponse Zx200ReleaseSimpleActionServer::handle_goal(
+    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const Zx200ReleaseSimple::Goal> goal)
 {
   RCLCPP_INFO(this->get_logger(), "Received goal request");
   (void)uuid;
@@ -105,9 +102,9 @@ rclcpp_action::GoalResponse Moveit2ReleaseSimpleActionServer::handle_goal(
 }
 
 rclcpp_action::CancelResponse
-Moveit2ReleaseSimpleActionServer::handle_cancel(const std::shared_ptr<GoalHandleExcavatorReleaseSimple> goal_handle)
+Zx200ReleaseSimpleActionServer::handle_cancel(const std::shared_ptr<GoalHandleZx200ReleaseSimple> goal_handle)
 {
-  RCLCPP_INFO(this->get_logger(), "Publishing EMG stop signal to Moveit2.");
+  RCLCPP_INFO(this->get_logger(), "Publishing EMG stop signal to ZX200.");
 
   // 実機用非常停止
   std_msgs::msg::Bool msg;
@@ -116,20 +113,20 @@ Moveit2ReleaseSimpleActionServer::handle_cancel(const std::shared_ptr<GoalHandle
   // move_group停止
   move_group_->stop();
 
-  // auto result = std::make_shared<ExcavatorReleaseSimple::Result>();
+  // auto result = std::make_shared<Zx200ReleaseSimple::Result>();
   // result->error_code.val = 9999;
   // goal_handle->abort(result);
 }
 
-void Moveit2ReleaseSimpleActionServer::handle_accepted(const std::shared_ptr<GoalHandleExcavatorReleaseSimple> goal_handle)
+void Zx200ReleaseSimpleActionServer::handle_accepted(const std::shared_ptr<GoalHandleZx200ReleaseSimple> goal_handle)
 {
   RCLCPP_INFO(this->get_logger(), "handle_accepted() start.");
   using namespace std::placeholders;
   // this needs to return quickly to avoid blocking the executor, so spin up a new thread
-  std::thread{ std::bind(&Moveit2ReleaseSimpleActionServer::execute, this, _1), goal_handle }.detach();
+  std::thread{ std::bind(&Zx200ReleaseSimpleActionServer::execute, this, _1), goal_handle }.detach();
 }
 
-void Moveit2ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleExcavatorReleaseSimple> goal_handle)
+void Zx200ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx200ReleaseSimple> goal_handle)
 {
   // Apply collision object
   apply_collision_objects_from_db(collision_object_record_name_);
@@ -168,8 +165,8 @@ void Moveit2ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleE
   RCLCPP_INFO(this->get_logger(), "Executing goal");
 
   const auto goal = goal_handle->get_goal();
-  auto feedback = std::make_shared<ExcavatorReleaseSimple::Feedback>();
-  auto result = std::make_shared<ExcavatorReleaseSimple::Result>();
+  auto feedback = std::make_shared<Zx200ReleaseSimple::Feedback>();
+  auto result = std::make_shared<Zx200ReleaseSimple::Result>();
 
   feedback->state = "IDLE";
   goal_handle->publish_feedback(feedback);
@@ -351,7 +348,7 @@ void Moveit2ReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandleE
   move_group_->clearPathConstraints();
 }
 
-void Moveit2ReleaseSimpleActionServer::apply_collision_objects_from_db(const std::string& record_name)
+void Zx200ReleaseSimpleActionServer::apply_collision_objects_from_db(const std::string& record_name)
 {
   // Load collision objects from DB
   // RCLCPP_INFO(this->get_logger(), "Loading collision objects from DB");
@@ -430,7 +427,7 @@ void Moveit2ReleaseSimpleActionServer::apply_collision_objects_from_db(const std
   }
 }
 
-void Moveit2ReleaseSimpleActionServer::apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names)
+void Zx200ReleaseSimpleActionServer::apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names)
 {
   for (const auto& record_name : record_names)
   {
@@ -499,7 +496,7 @@ void Moveit2ReleaseSimpleActionServer::apply_collision_objects_mesh_from_db(cons
   }
 }
 
-double Moveit2ReleaseSimpleActionServer::getDoubleValue(const bsoncxx::document::element& element)
+double Zx200ReleaseSimpleActionServer::getDoubleValue(const bsoncxx::document::element& element)
 {
   if (element.type() == bsoncxx::type::k_double)
   {
@@ -518,7 +515,7 @@ double Moveit2ReleaseSimpleActionServer::getDoubleValue(const bsoncxx::document:
 int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<Moveit2ReleaseSimpleActionServer>());
+  rclcpp::spin(std::make_shared<Zx200ReleaseSimpleActionServer>());
   rclcpp::shutdown();
   return 0;
 }
