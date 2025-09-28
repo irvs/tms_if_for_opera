@@ -102,6 +102,28 @@ def generate_launch_description():
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
+    moveit2_level_action_server_node = Node(
+        package='tms_if_for_opera',
+        executable='moveit2_level_action_server',
+        namespace='zx200',
+        parameters=[
+            {'robot_description': robot_description_content},
+            {'planning_group': LaunchConfiguration('planning_group')},
+            {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
+            {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}
+        ])
+    moveit2_gather_action_server_node = Node(
+        package='tms_if_for_opera',
+        executable='moveit2_gather_action_server',
+        namespace='zx200',
+        parameters=[
+            {'robot_description': robot_description_content},
+            {'planning_group': LaunchConfiguration('planning_group')},
+            {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
+            {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}
+        ])
     scene_manager_node = Node(
         package='tms_if_for_opera',
         executable='scene_manager',
@@ -174,6 +196,8 @@ def generate_launch_description():
         moveit2_excavate_simple_action_server_node,
         moveit2_excavate_simple_plan_action_server_node,
         moveit2_release_simple_action_server_node,
+        moveit2_level_action_server_node,
+        moveit2_gather_action_server_node,
         scene_manager_node,
 
         navigation2_navigate_through_poses_node,

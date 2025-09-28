@@ -58,7 +58,7 @@ Moveit2ExcavateSimpleActionServer::Moveit2ExcavateSimpleActionServer(const rclcp
   using namespace std::placeholders;
 
   action_server_ = rclcpp_action::create_server<ExcavatorExcavateSimple>(
-      this, "tms_rp_excavator_excavate_simple_plan", std::bind(&Moveit2ExcavateSimpleActionServer::handle_goal, this, _1, _2),
+      this, "tms_rp_excavate_simple_plan", std::bind(&Moveit2ExcavateSimpleActionServer::handle_goal, this, _1, _2),
       std::bind(&Moveit2ExcavateSimpleActionServer::handle_cancel, this, _1),
       std::bind(&Moveit2ExcavateSimpleActionServer::handle_accepted, this, _1));
   /****/

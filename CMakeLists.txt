@@ -14,6 +14,8 @@ endif()
 set(MOVEIT2_TARGETS
   moveit2_change_pose_action_server
   moveit2_change_pose_plan_action_server
+  moveit2_level_action_server
+  moveit2_gather_action_server
   moveit2_excavate_simple_action_server
   moveit2_excavate_simple_plan_action_server
   moveit2_release_simple_action_server
@@ -53,6 +55,7 @@ find_package(nav2_msgs REQUIRED)
 find_package(com3_msgs REQUIRED)
 
 add_library(excavator_ik SHARED src/excavator_ik.cpp)
+add_library(excavator_pose_converter SHARED src/excavator_pose_converter.cpp)
 ament_target_dependencies(excavator_ik rclcpp urdf)
 
 set(COMMON_DEPENDENCIES
@@ -89,6 +92,7 @@ set(COMMON_LINK_LIBS
   mongocxx
   bsoncxx
   excavator_ik
+  excavator_pose_converter
 )
 
 foreach(TARGET ${MOVEIT2_TARGETS})
@@ -118,7 +122,7 @@ foreach(TARGET ${OTHERS_TARGETS})
   install(TARGETS ${TARGET} DESTINATION lib/${PROJECT_NAME})
 endforeach()
 
-install(TARGETS excavator_ik
+install(TARGETS excavator_ik excavator_pose_converter
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin)
