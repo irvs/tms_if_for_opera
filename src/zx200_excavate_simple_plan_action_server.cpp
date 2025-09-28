@@ -1,4 +1,4 @@
-#include "tms_if_for_opera/moveit2/moveit2_excavate_simple_action_server.hpp"
+#include "tms_if_for_opera/zx200_excavate_simple_action_server.hpp"
 
 // #include <moveit_msgs/msg/constraints.hpp>
 // #include <moveit_msgs/msg/orientation_constraint.hpp>
@@ -15,8 +15,8 @@
 
 using namespace tms_if_for_opera;
 
-Moveit2ExcavateSimpleActionServer::Moveit2ExcavateSimpleActionServer(const rclcpp::NodeOptions& options)
-  : Node("tms_if_for_opera_moveit2_excavate_simple", options)
+Zx200ExcavateSimpleActionServer::Zx200ExcavateSimpleActionServer(const rclcpp::NodeOptions& options)
+  : Node("tms_if_for_opera_zx200_excavate_simple_plan", options)
 {
   this->declare_parameter<std::string>("robot_description", "");
   this->get_parameter("robot_description", robot_description_);
@@ -26,9 +26,6 @@ Moveit2ExcavateSimpleActionServer::Moveit2ExcavateSimpleActionServer(const rclcp
   this->declare_parameter<std::string>("planning_group", "");
   this->get_parameter("planning_group", planning_group_);
   RCLCPP_INFO(this->get_logger(), "Planning group: %s", planning_group_.c_str());
-
-  std::string namespace_param = this->get_namespace();
-  RCLCPP_INFO(this->get_logger(), "Node namespace: %s", namespace_param.c_str());
 
   this->declare_parameter<std::string>("collision_object_record_name", "");
   this->get_parameter("collision_object_record_name", collision_object_record_name_);
@@ -57,10 +54,10 @@ Moveit2ExcavateSimpleActionServer::Moveit2ExcavateSimpleActionServer(const rclcp
   RCLCPP_INFO(this->get_logger(), "Create server.");  // debug
   using namespace std::placeholders;
 
-  action_server_ = rclcpp_action::create_server<ExcavatorExcavateSimple>(
-      this, "tms_rp_excavator_excavate_simple", std::bind(&Moveit2ExcavateSimpleActionServer::handle_goal, this, _1, _2),
-      std::bind(&Moveit2ExcavateSimpleActionServer::handle_cancel, this, _1),
-      std::bind(&Moveit2ExcavateSimpleActionServer::handle_accepted, this, _1));
+  action_server_ = rclcpp_action::create_server<Zx200ExcavateSimple>(
+      this, "tms_rp_zx200_excavate_simple_plan", std::bind(&Zx200ExcavateSimpleActionServer::handle_goal, this, _1, _2),
+      std::bind(&Zx200ExcavateSimpleActionServer::handle_cancel, this, _1),
+      std::bind(&Zx200ExcavateSimpleActionServer::handle_accepted, this, _1));
   /****/
 
   /* Setup movegroup interface */
@@ -73,7 +70,7 @@ Moveit2ExcavateSimpleActionServer::Moveit2ExcavateSimpleActionServer(const rclcp
   std::thread([this]() { executor_.spin(); }).detach();
 
   // move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, planning_group_);
-  move_group_options_ = std::make_shared<moveit::planning_interface::MoveGroupInterface::Options>(planning_group_, "robot_description", namespace_param);
+  move_group_options_ = std::make_shared<moveit::planning_interface::MoveGroupInterface::Options>(planning_group_, "robot_description", "/zx200");
   move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, *move_group_options_);
   
   // moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
@@ -94,11 +91,12 @@ Moveit2ExcavateSimpleActionServer::Moveit2ExcavateSimpleActionServer(const rclcp
   mongocxx::instance instance{};
 
   // For emg stop
-  this->emg_stop_publisher_ = this->create_publisher<std_msgs::msg::Bool>("emg_stop", 10);
-}
+  this->emg_stop_publisher_ = this->create_publisher<std_msgs::msg::Bool>("/zx200/emg_stop", 10);
 
-rclcpp_action::GoalResponse Moveit2ExcavateSimpleActionServer::handle_goal(
-    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const ExcavatorExcavateSimple::Goal> goal)
+ }
+
+rclcpp_action::GoalResponse Zx200ExcavateSimpleActionServer::handle_goal(
+    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const Zx200ExcavateSimple::Goal> goal)
 {
   RCLCPP_INFO(this->get_logger(), "Received goal request");
   (void)uuid;
@@ -106,9 +104,9 @@ rclcpp_action::GoalResponse Moveit2ExcavateSimpleActionServer::handle_goal(
 }
 
 rclcpp_action::CancelResponse
-Moveit2ExcavateSimpleActionServer::handle_cancel(const std::shared_ptr<GoalHandleExcavatorExcavateSimple> goal_handle)
+Zx200ExcavateSimpleActionServer::handle_cancel(const std::shared_ptr<GoalHandleZx200ExcavateSimple> goal_handle)
 {
-  RCLCPP_INFO(this->get_logger(), "Publishing EMG stop signal to Moveit2.");
+  RCLCPP_INFO(this->get_logger(), "Publishing EMG stop signal to ZX200.");
 
   // 実機用非常停止
   std_msgs::msg::Bool msg;
@@ -117,27 +115,27 @@ Moveit2ExcavateSimpleActionServer::handle_cancel(const std::shared_ptr<GoalHandl
   // move_group停止
   move_group_->stop();
 
-  // auto result = std::make_shared<ExcavatorExcavateSimple::Result>();
+  // auto result = std::make_shared<Zx200ExcavateSimple::Result>();
   // result->error_code.val = 9999;
   // goal_handle->abort(result);
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-void Moveit2ExcavateSimpleActionServer::handle_accepted(const std::shared_ptr<GoalHandleExcavatorExcavateSimple> goal_handle)
+void Zx200ExcavateSimpleActionServer::handle_accepted(const std::shared_ptr<GoalHandleZx200ExcavateSimple> goal_handle)
 {
   RCLCPP_INFO(this->get_logger(), "handle_accepted() start.");
   using namespace std::placeholders;
   // this needs to return quickly to avoid blocking the executor, so spin up a new thread
-  std::thread{ std::bind(&Moveit2ExcavateSimpleActionServer::execute, this, _1), goal_handle }.detach();
+  std::thread{ std::bind(&Zx200ExcavateSimpleActionServer::execute, this, _1), goal_handle }.detach();
 }
 
-void Moveit2ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleExcavatorExcavateSimple> goal_handle)
+void Zx200ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleZx200ExcavateSimple> goal_handle)
 {
   // Start to execute goal
   RCLCPP_INFO(this->get_logger(), "Executing goal");
   const auto goal = goal_handle->get_goal();
-  auto feedback = std::make_shared<ExcavatorExcavateSimple::Feedback>();
-  auto result = std::make_shared<ExcavatorExcavateSimple::Result>();
+  auto feedback = std::make_shared<Zx200ExcavateSimple::Feedback>();
+  auto result = std::make_shared<Zx200ExcavateSimple::Result>();
 
   // Function for error handling
   auto handle_error = [&](const std::string& message) {
@@ -200,7 +198,8 @@ void Moveit2ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandle
   std::vector<double> target_joint_values(joint_names_.size(), 0.0);
 
   bool found = false;
-  // double theta_offset = 0.1;
+  double theta_offset = 0.1;
+  // double best_theta = theta_w - theta_offset;
   double best_theta = theta_w;
 
   for (double delta = 0.0; delta <= theta_max; delta += step) {
@@ -309,50 +308,16 @@ void Moveit2ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandle
       goal_handle->abort(result);
       return;
     }
-    
-  //   bool all_success = true;
-  //   // 成功した場合、順番に実行
-  //   for (const auto& plan : plans) {
-  //     moveit::core::MoveItErrorCode exec_result = move_group_->execute(plan);
-    
-  //     if (exec_result == moveit::core::MoveItErrorCode::SUCCESS) {
-  //       continue;  // 正常に完了
-  //     } else if (exec_result == moveit::core::MoveItErrorCode::CONTROL_FAILED) {
-  //       RCLCPP_WARN(this->get_logger(), "Execution timed out, but continuing to next trajectory...");
-  //       joint_targets.erase(joint_targets.begin());
-  //       plans.clear();  // 前のプランは破棄
-  //       all_success = false;
-  //       break;  // タイムアウトだが無視して次へ
-  //     } else {
-  //       RCLCPP_ERROR(this->get_logger(), "Execution failed with error code: %d", exec_result.val);
-  //       result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
-  //       goal_handle->abort(result);
-  //       return;
-  //     }
-  //   }
-
-  //   if (all_success) {
-  //     RCLCPP_INFO(this->get_logger(), "All trajectories executed successfully.");
-  //     result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::SUCCEEDED);
-  //     goal_handle->succeed(result);
+  
+  // // 成功した場合、順番に実行
+  // for (const auto& plan : plans) {
+  //   if (!move_group_->execute(plan)) {
+  //     RCLCPP_ERROR(this->get_logger(), "Execution failed for one of the trajectories");
+  //     result->error_code.val = moveit::core::MoveItErrorCode::CONTROL_FAILED;
+  //     goal_handle->abort(result);
   //     return;
   //   }
   // }
-
-  // RCLCPP_INFO(this->get_logger(), "All trajectories executed successfully.");
-  // result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::SUCCEEDED);
-  // goal_handle->succeed(result);
-  
-
-  // // 成功した場合、順番に実行
-  for (const auto& plan : plans) {
-    if (!move_group_->execute(plan)) {
-      RCLCPP_ERROR(this->get_logger(), "Execution failed for one of the trajectories");
-      result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
-      goal_handle->abort(result);
-      return;
-    }
-  }
 
   // // Execute
   // feedback->state = "EXECUTING";
@@ -490,12 +455,12 @@ void Moveit2ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandle
   // }
 
   // If execution was successful, set the result of the action and mark it as succeeded.
-  RCLCPP_INFO(this->get_logger(), "Goal succeeded");
+  RCLCPP_INFO(this->get_logger(), "Plan succeeded");
   result->error_code.val = 1;
   goal_handle->succeed(result);
 }
 
-void Moveit2ExcavateSimpleActionServer::apply_collision_objects_from_db(const std::string& record_name)
+void Zx200ExcavateSimpleActionServer::apply_collision_objects_from_db(const std::string& record_name)
 {
   // Load collision objects from DB
   // RCLCPP_INFO(this->get_logger(), "Loading collision objects from DB");
@@ -574,7 +539,7 @@ void Moveit2ExcavateSimpleActionServer::apply_collision_objects_from_db(const st
   }
 }
 
-void Moveit2ExcavateSimpleActionServer::apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names)
+void Zx200ExcavateSimpleActionServer::apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names)
 {
   for (const auto& record_name : record_names)
   {
@@ -643,7 +608,8 @@ void Moveit2ExcavateSimpleActionServer::apply_collision_objects_mesh_from_db(con
   }
 }
 
-double Moveit2ExcavateSimpleActionServer::getDoubleValue(const bsoncxx::document::element& element)
+
+double Zx200ExcavateSimpleActionServer::getDoubleValue(const bsoncxx::document::element& element)
 {
   if (element.type() == bsoncxx::type::k_double)
   {
@@ -662,7 +628,7 @@ double Moveit2ExcavateSimpleActionServer::getDoubleValue(const bsoncxx::document
 int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<Moveit2ExcavateSimpleActionServer>());
+  rclcpp::spin(std::make_shared<Zx200ExcavateSimpleActionServer>());
   rclcpp::shutdown();
   return 0;
 }
