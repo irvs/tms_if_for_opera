@@ -13,34 +13,34 @@
 // limitations under the License.
 
 #include <vector>
-#include "tms_if_for_opera/CrawlerDump/crawlerdump_swing.hpp"
+#include "tms_if_for_opera/Crawlerdump/crawlerdump_release_soil.hpp"
 // #include <glog/logging.h>
 
 using std::placeholders::_1;
 using std::placeholders::_2;
 
-CrawlerDumpSwing::CrawlerDumpSwing() : rclcpp::Node("tms_if_crawlerdump_swing_node")
+CrawlerdumpReleaseSoil::CrawlerdumpReleaseSoil() : rclcpp::Node("tms_if_crawlerdump_release_soil_node")
 {
-    this->action_server_ = rclcpp_action::create_server<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle>(
-        this, "tms_rp_set_swing_angle",
-        std::bind(&CrawlerDumpSwing::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
-        std::bind(&CrawlerDumpSwing::handle_cancel, this, std::placeholders::_1),
-        std::bind(&CrawlerDumpSwing::handle_accepted, this, std::placeholders::_1));
+    this->action_server_ = rclcpp_action::create_server<tms_msg_rp::action::TmsRpCrawlerdumpDumpAngle>(
+        this, "tms_rp_set_dump_angle",
+        std::bind(&CrawlerdumpReleaseSoil::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
+        std::bind(&CrawlerdumpReleaseSoil::handle_cancel, this, std::placeholders::_1),
+        std::bind(&CrawlerdumpReleaseSoil::handle_accepted, this, std::placeholders::_1));
 
     
-    action_client_ = rclcpp_action::create_client<SetSwingAngle>(this, "set_swing_angle");
+    action_client_ = rclcpp_action::create_client<SetDumpAngle>(this, "set_dump_angle");
 }
 
-rclcpp_action::GoalResponse CrawlerDumpSwing::handle_goal(
-    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle::Goal> goal)
+rclcpp_action::GoalResponse CrawlerdumpReleaseSoil::handle_goal(
+    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const tms_msg_rp::action::TmsRpCrawlerdumpDumpAngle::Goal> goal)
 {
     RCLCPP_INFO(this->get_logger(), "Received goal request");
     return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
-rclcpp_action::CancelResponse CrawlerDumpSwing::handle_cancel(const std::shared_ptr<GoalHandle> goal_handle)
+rclcpp_action::CancelResponse CrawlerdumpReleaseSoil::handle_cancel(const std::shared_ptr<GoalHandle> goal_handle)
 {
-    RCLCPP_INFO(this->get_logger(), "Received request to cancel tms_if_crawlerdump_swing node");
+    RCLCPP_INFO(this->get_logger(), "Received request to cancel tms_if_crawlerdump_release_soil_node node");
     if (client_future_goal_handle_.valid() &&
         client_future_goal_handle_.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
     {
@@ -50,17 +50,17 @@ rclcpp_action::CancelResponse CrawlerDumpSwing::handle_cancel(const std::shared_
     return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-void CrawlerDumpSwing::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
+void CrawlerdumpReleaseSoil::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
 {
     using namespace std::placeholders;
-    std::thread{ std::bind(&CrawlerDumpSwing::execute, this, _1), goal_handle }.detach();
+    std::thread{ std::bind(&CrawlerdumpReleaseSoil::execute, this, _1), goal_handle }.detach();
 }
 
-void CrawlerDumpSwing::execute(const std::shared_ptr<GoalHandle> goal_handle)
+void CrawlerdumpReleaseSoil::execute(const std::shared_ptr<GoalHandle> goal_handle)
 {
-    RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_crawlerdump_swing_node) is executing...");
+    RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_crawlerdump_release_soil) is executing...");
     current_goal_handle_ = goal_handle;
-    auto result = std::make_shared<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle::Result>();
+    auto result = std::make_shared<tms_msg_rp::action::TmsRpCrawlerdumpDumpAngle::Result>();
     auto handle_error = [&](const std::string& message) {
         if (goal_handle->is_active())
         {
@@ -73,12 +73,12 @@ void CrawlerDumpSwing::execute(const std::shared_ptr<GoalHandle> goal_handle)
         }
     };
 
-    auto goal_msg = SetSwingAngle::Goal();
+    auto goal_msg = SetDumpAngle::Goal();
     auto received_goal = goal_handle->get_goal();
     goal_msg.target_angle = received_goal->target_angle;
 
     //進捗状況を表示するFeedbackコールバックを設�?
-    auto send_goal_options = rclcpp_action::Client<SetSwingAngle>::SendGoalOptions();
+    auto send_goal_options = rclcpp_action::Client<SetDumpAngle>::SendGoalOptions();
     send_goal_options.goal_response_callback = [this](const auto& goal_handle) { goal_response_callback(goal_handle); };
     send_goal_options.feedback_callback = [this](const auto tmp, const auto feedback) {
         feedback_callback(tmp, feedback);
@@ -90,7 +90,7 @@ void CrawlerDumpSwing::execute(const std::shared_ptr<GoalHandle> goal_handle)
     client_future_goal_handle_ = action_client_->async_send_goal(goal_msg, send_goal_options);
 }
 
-void CrawlerDumpSwing::goal_response_callback(const GoalHandleCrawlerDumpSwing::SharedPtr& goal_handle)
+void CrawlerdumpReleaseSoil::goal_response_callback(const GoalHandleCrawlerdumpReleaseSoil::SharedPtr& goal_handle)
 {
   if (!goal_handle)
   {
@@ -103,17 +103,17 @@ void CrawlerDumpSwing::goal_response_callback(const GoalHandleCrawlerDumpSwing::
 }
 
   
-void CrawlerDumpSwing::feedback_callback(
-    const GoalHandleCrawlerDumpSwing::SharedPtr,
-    const std::shared_ptr<const GoalHandleCrawlerDumpSwing::Feedback> feedback)
+void CrawlerdumpReleaseSoil::feedback_callback(
+    const GoalHandleCrawlerdumpReleaseSoil::SharedPtr,
+    const std::shared_ptr<const GoalHandleCrawlerdumpReleaseSoil::Feedback> feedback)
 {
 
 }
 
 
 //result
-void CrawlerDumpSwing::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
-                                             const GoalHandleCrawlerDumpSwing::WrappedResult& result)
+void CrawlerdumpReleaseSoil::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
+                                             const GoalHandleCrawlerdumpReleaseSoil::WrappedResult& result)
 {
   if (!goal_handle->is_active())
   {
@@ -121,20 +121,20 @@ void CrawlerDumpSwing::result_callback(const std::shared_ptr<GoalHandle> goal_ha
     return;
   }
 
-  auto result_to_st_node = std::make_shared<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle::Result>();
+  auto result_to_st_node = std::make_shared<tms_msg_rp::action::TmsRpCrawlerdumpDumpAngle::Result>();
   switch (result.code)
   {
     case rclcpp_action::ResultCode::SUCCEEDED:
       goal_handle->succeed(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if swing is succeeded");
+      RCLCPP_INFO(this->get_logger(), "tms if release_soil is succeeded");
       break;
     case rclcpp_action::ResultCode::ABORTED:
       goal_handle->abort(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if swing is aborted");
+      RCLCPP_INFO(this->get_logger(), "tms if release_soil is aborted");
       break;
     case rclcpp_action::ResultCode::CANCELED:
       goal_handle->canceled(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if swing is canceled");
+      RCLCPP_INFO(this->get_logger(), "tms if release_soil is canceled");
       break;
     default:
       goal_handle->abort(result_to_st_node);
@@ -150,7 +150,7 @@ int main(int argc, char* argv[])
     //   google::InstallFailureSignalHandler();
 
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<CrawlerDumpSwing>());
+    rclcpp::spin(std::make_shared<CrawlerdumpReleaseSoil>());
     rclcpp::shutdown();
     return 0;
 }

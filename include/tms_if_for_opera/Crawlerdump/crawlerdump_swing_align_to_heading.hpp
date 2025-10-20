@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef CRAWLERDUMP_SWING_HPP
-#define CRAWLERDUMP_SWING_HPP
+#ifndef CRAWLERDUMP_SWING_ALIGN_TO_HEADING_HPP
+#define CRAWLERDUMP_SWING_ALIGN_TO_HEADING_HPP
 
 #include <memory>
 #include <map>
@@ -31,24 +31,25 @@
 #include "std_msgs/msg/float64.hpp"
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
-#include "tms_msg_rp/action/tms_rp_crawler_dump_swing_angle.hpp"
+#include "sensor_msgs/msg/joint_state.hpp"
+#include "tms_msg_rp/action/tms_rp_crawlerdump_swing_angle.hpp"
 #include "com3_msgs/action/set_swing_angle.hpp"
 
 
-class CrawlerDumpSwing : public rclcpp::Node
+class CrawlerdumpSwingAlignToHeading : public rclcpp::Node
 {
 public:
-    using GoalHandle = rclcpp_action::ServerGoalHandle<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle>;
+    using GoalHandle = rclcpp_action::ServerGoalHandle<tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle>;
     using SetSwingAngle = com3_msgs::action::SetSwingAngle;
-    using GoalHandleCrawlerDumpSwing = rclcpp_action::ClientGoalHandle<SetSwingAngle>;
-    CrawlerDumpSwing();
+    using GoalHandleCrawlerdumpSwingAlignToHeading = rclcpp_action::ClientGoalHandle<SetSwingAngle>;
+    CrawlerdumpSwingAlignToHeading();
 
 
 private:
-    rclcpp_action::Server<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle>::SharedPtr action_server_;
+    rclcpp_action::Server<tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle>::SharedPtr action_server_;
     std::map<std::pair<std::string, std::string>, double> param_from_db_;
     rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID& uuid,
-                                            std::shared_ptr<const tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle::Goal> goal);
+                                            std::shared_ptr<const tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle::Goal> goal);
     rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandle> goal_handle);
     void handle_accepted(const std::shared_ptr<GoalHandle> goal_handle);
     void execute(const std::shared_ptr<GoalHandle> goal_handle);
@@ -57,13 +58,13 @@ private:
 
     // Member as an action client
     rclcpp_action::Client<SetSwingAngle>::SharedPtr action_client_;
-    std::shared_future<GoalHandleCrawlerDumpSwing::SharedPtr> client_future_goal_handle_;
+    std::shared_future<GoalHandleCrawlerdumpSwingAlignToHeading::SharedPtr> client_future_goal_handle_;
     std::map<std::string, double> parameters;
-    void goal_response_callback(const GoalHandleCrawlerDumpSwing::SharedPtr& goal_handle);
-    void feedback_callback(GoalHandleCrawlerDumpSwing::SharedPtr,
+    void goal_response_callback(const GoalHandleCrawlerdumpSwingAlignToHeading::SharedPtr& goal_handle);
+    void feedback_callback(GoalHandleCrawlerdumpSwingAlignToHeading::SharedPtr,
                             const std::shared_ptr<const SetSwingAngle::Feedback> feedback);
     void result_callback(const std::shared_ptr<GoalHandle> goal_handle,
-                        const GoalHandleCrawlerDumpSwing::WrappedResult& result);
+                        const GoalHandleCrawlerdumpSwingAlignToHeading::WrappedResult& result);
 };
 
 #endif

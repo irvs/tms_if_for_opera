@@ -13,32 +13,32 @@
 // limitations under the License.
 
 #include <vector>
-#include "tms_if_for_opera/CrawlerDump/crawlerdump_swing_align_to_heading.hpp"
+#include "tms_if_for_opera/Crawlerdump/crawlerdump_swing_align_to_heading.hpp"
 // #include <glog/logging.h>
 
 using std::placeholders::_1;
 using std::placeholders::_2;
 
-CrawlerDumpSwingAlignToHeading::CrawlerDumpSwingAlignToHeading() : rclcpp::Node("tms_if_crawlerdump_swing_align_to_heading_node")
+CrawlerdumpSwingAlignToHeading::CrawlerdumpSwingAlignToHeading() : rclcpp::Node("tms_if_crawlerdump_swing_align_to_heading_node")
 {
-    this->action_server_ = rclcpp_action::create_server<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle>(
+    this->action_server_ = rclcpp_action::create_server<tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle>(
         this, "tms_rp_set_swing_angle_align_to_heading",
-        std::bind(&CrawlerDumpSwingAlignToHeading::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
-        std::bind(&CrawlerDumpSwingAlignToHeading::handle_cancel, this, std::placeholders::_1),
-        std::bind(&CrawlerDumpSwingAlignToHeading::handle_accepted, this, std::placeholders::_1));
+        std::bind(&CrawlerdumpSwingAlignToHeading::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
+        std::bind(&CrawlerdumpSwingAlignToHeading::handle_cancel, this, std::placeholders::_1),
+        std::bind(&CrawlerdumpSwingAlignToHeading::handle_accepted, this, std::placeholders::_1));
 
     
     action_client_ = rclcpp_action::create_client<SetSwingAngle>(this, "set_swing_angle");
 }
 
-rclcpp_action::GoalResponse CrawlerDumpSwingAlignToHeading::handle_goal(
-    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle::Goal> goal)
+rclcpp_action::GoalResponse CrawlerdumpSwingAlignToHeading::handle_goal(
+    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle::Goal> goal)
 {
     RCLCPP_INFO(this->get_logger(), "Received goal request");
     return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
-rclcpp_action::CancelResponse CrawlerDumpSwingAlignToHeading::handle_cancel(const std::shared_ptr<GoalHandle> goal_handle)
+rclcpp_action::CancelResponse CrawlerdumpSwingAlignToHeading::handle_cancel(const std::shared_ptr<GoalHandle> goal_handle)
 {
     RCLCPP_INFO(this->get_logger(), "Received request to cancel tms_if_crawlerdump_swing_align_to_heading node");
     if (client_future_goal_handle_.valid() &&
@@ -50,17 +50,17 @@ rclcpp_action::CancelResponse CrawlerDumpSwingAlignToHeading::handle_cancel(cons
     return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-void CrawlerDumpSwingAlignToHeading::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
+void CrawlerdumpSwingAlignToHeading::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
 {
     using namespace std::placeholders;
-    std::thread{ std::bind(&CrawlerDumpSwingAlignToHeading::execute, this, _1), goal_handle }.detach();
+    std::thread{ std::bind(&CrawlerdumpSwingAlignToHeading::execute, this, _1), goal_handle }.detach();
 }
 
-void CrawlerDumpSwingAlignToHeading::execute(const std::shared_ptr<GoalHandle> goal_handle)
+void CrawlerdumpSwingAlignToHeading::execute(const std::shared_ptr<GoalHandle> goal_handle)
 {
     RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_crawlerdump_swing_align_to_heading_node) is executing...");
     current_goal_handle_ = goal_handle;
-    auto result = std::make_shared<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle::Result>();
+    auto result = std::make_shared<tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle::Result>();
     auto handle_error = [&](const std::string& message) {
         if (goal_handle->is_active())
         {
@@ -140,7 +140,7 @@ void CrawlerDumpSwingAlignToHeading::execute(const std::shared_ptr<GoalHandle> g
     client_future_goal_handle_ = action_client_->async_send_goal(goal_msg, send_goal_options);
 }
 
-void CrawlerDumpSwingAlignToHeading::goal_response_callback(const GoalHandleCrawlerDumpSwingAlignToHeading::SharedPtr& goal_handle)
+void CrawlerdumpSwingAlignToHeading::goal_response_callback(const GoalHandleCrawlerdumpSwingAlignToHeading::SharedPtr& goal_handle)
 {
   if (!goal_handle)
   {
@@ -153,17 +153,17 @@ void CrawlerDumpSwingAlignToHeading::goal_response_callback(const GoalHandleCraw
 }
 
   
-void CrawlerDumpSwingAlignToHeading::feedback_callback(
-    const GoalHandleCrawlerDumpSwingAlignToHeading::SharedPtr,
-    const std::shared_ptr<const GoalHandleCrawlerDumpSwingAlignToHeading::Feedback> feedback)
+void CrawlerdumpSwingAlignToHeading::feedback_callback(
+    const GoalHandleCrawlerdumpSwingAlignToHeading::SharedPtr,
+    const std::shared_ptr<const GoalHandleCrawlerdumpSwingAlignToHeading::Feedback> feedback)
 {
 
 }
 
 
 //result
-void CrawlerDumpSwingAlignToHeading::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
-                                             const GoalHandleCrawlerDumpSwingAlignToHeading::WrappedResult& result)
+void CrawlerdumpSwingAlignToHeading::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
+                                             const GoalHandleCrawlerdumpSwingAlignToHeading::WrappedResult& result)
 {
   if (!goal_handle->is_active())
   {
@@ -171,7 +171,7 @@ void CrawlerDumpSwingAlignToHeading::result_callback(const std::shared_ptr<GoalH
     return;
   }
 
-  auto result_to_st_node = std::make_shared<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle::Result>();
+  auto result_to_st_node = std::make_shared<tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle::Result>();
   switch (result.code)
   {
     case rclcpp_action::ResultCode::SUCCEEDED:
@@ -200,7 +200,7 @@ int main(int argc, char* argv[])
     //   google::InstallFailureSignalHandler();
 
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<CrawlerDumpSwingAlignToHeading>());
+    rclcpp::spin(std::make_shared<CrawlerdumpSwingAlignToHeading>());
     rclcpp::shutdown();
     return 0;
 }

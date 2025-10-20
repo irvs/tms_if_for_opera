@@ -13,34 +13,34 @@
 // limitations under the License.
 
 #include <vector>
-#include "tms_if_for_opera/CrawlerDump/crawlerdump_follow_waypoints_deg.hpp"
+#include "tms_if_for_opera/Crawlerdump/crawlerdump_navigate_through_poses.hpp"
 // #include <glog/logging.h>
 
 using std::placeholders::_1;
 using std::placeholders::_2;
 
-CrawlerdumpFollowWaypointsDeg::CrawlerdumpFollowWaypointsDeg() : rclcpp::Node("tms_if_follow_waypoints_node")
+CrawlerdumpNavigateThroughPoses::CrawlerdumpNavigateThroughPoses() : rclcpp::Node("tms_if_navigate_through_poses_node")
 {
-    this->action_server_ = rclcpp_action::create_server<FollowWaypoints>(
-        this, "tms_rp_navigate_follow_waypoints",
-        std::bind(&CrawlerdumpFollowWaypointsDeg::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
-        std::bind(&CrawlerdumpFollowWaypointsDeg::handle_cancel, this, std::placeholders::_1),
-        std::bind(&CrawlerdumpFollowWaypointsDeg::handle_accepted, this, std::placeholders::_1));
+    this->action_server_ = rclcpp_action::create_server<NavigateThroughPoses>(
+        this, "tms_rp_navigate_through_poses",
+        std::bind(&CrawlerdumpNavigateThroughPoses::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
+        std::bind(&CrawlerdumpNavigateThroughPoses::handle_cancel, this, std::placeholders::_1),
+        std::bind(&CrawlerdumpNavigateThroughPoses::handle_accepted, this, std::placeholders::_1));
 
     
-    action_client_ = rclcpp_action::create_client<FollowWaypoints>(this, "follow_waypoints");
+    action_client_ = rclcpp_action::create_client<NavigateThroughPoses>(this, "navigate_through_poses");
 }
 
-rclcpp_action::GoalResponse CrawlerdumpFollowWaypointsDeg::handle_goal(
-    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const FollowWaypoints::Goal> goal)
+rclcpp_action::GoalResponse CrawlerdumpNavigateThroughPoses::handle_goal(
+    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const NavigateThroughPoses::Goal> goal)
 {
     RCLCPP_INFO(this->get_logger(), "Received goal request");
     return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
-rclcpp_action::CancelResponse CrawlerdumpFollowWaypointsDeg::handle_cancel(const std::shared_ptr<GoalHandle> goal_handle)
+rclcpp_action::CancelResponse CrawlerdumpNavigateThroughPoses::handle_cancel(const std::shared_ptr<GoalHandle> goal_handle)
 {
-    RCLCPP_INFO(this->get_logger(), "Received request to cancel tms_if_follow_waypoints_node node");
+    RCLCPP_INFO(this->get_logger(), "Received request to cancel tms_if_navigate_through_poses_node node");
     if (client_future_goal_handle_.valid() &&
         client_future_goal_handle_.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
     {
@@ -50,18 +50,18 @@ rclcpp_action::CancelResponse CrawlerdumpFollowWaypointsDeg::handle_cancel(const
     return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-void CrawlerdumpFollowWaypointsDeg::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
+void CrawlerdumpNavigateThroughPoses::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
 {
     using namespace std::placeholders;
-    std::thread{ std::bind(&CrawlerdumpFollowWaypointsDeg::execute, this, _1), goal_handle }.detach();
+    std::thread{ std::bind(&CrawlerdumpNavigateThroughPoses::execute, this, _1), goal_handle }.detach();
 }
 
-void CrawlerdumpFollowWaypointsDeg::execute(const std::shared_ptr<GoalHandle> goal_handle)
+void CrawlerdumpNavigateThroughPoses::execute(const std::shared_ptr<GoalHandle> goal_handle)
 {
-    RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_follow_waypoints_node) is executing...");
+    RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_navigate_through_poses_node) is executing...");
     current_goal_handle_ = goal_handle;
 
-    auto result = std::make_shared<FollowWaypoints::Result>();
+    auto result = std::make_shared<NavigateThroughPoses::Result>();
     auto handle_error = [&](const std::string& message) {
         if (goal_handle->is_active())
         {
@@ -78,7 +78,7 @@ void CrawlerdumpFollowWaypointsDeg::execute(const std::shared_ptr<GoalHandle> go
     auto goal_msg = *received_goal;
 
     //進捗状況を表示するFeedbackコールバックを設�?
-    auto send_goal_options = rclcpp_action::Client<FollowWaypoints>::SendGoalOptions();
+    auto send_goal_options = rclcpp_action::Client<NavigateThroughPoses>::SendGoalOptions();
     send_goal_options.goal_response_callback = [this](const auto& goal_handle) { goal_response_callback(goal_handle); };
     send_goal_options.feedback_callback = [this](const auto tmp, const auto feedback) {
         feedback_callback(tmp, feedback);
@@ -90,7 +90,7 @@ void CrawlerdumpFollowWaypointsDeg::execute(const std::shared_ptr<GoalHandle> go
     client_future_goal_handle_ = action_client_->async_send_goal(goal_msg, send_goal_options);
 }
 
-void CrawlerdumpFollowWaypointsDeg::goal_response_callback(const GoalHandleFollowWaypoints::SharedPtr& goal_handle)
+void CrawlerdumpNavigateThroughPoses::goal_response_callback(const GoalHandleNavigateThroughPoses::SharedPtr& goal_handle)
 {
   if (!goal_handle)
   {
@@ -103,11 +103,11 @@ void CrawlerdumpFollowWaypointsDeg::goal_response_callback(const GoalHandleFollo
 }
 
   
-void CrawlerdumpFollowWaypointsDeg::feedback_callback(
-    const GoalHandleFollowWaypoints::SharedPtr,
-    const std::shared_ptr<const GoalHandleFollowWaypoints::Feedback> feedback)
+void CrawlerdumpNavigateThroughPoses::feedback_callback(
+    const GoalHandleNavigateThroughPoses::SharedPtr,
+    const std::shared_ptr<const GoalHandleNavigateThroughPoses::Feedback> feedback)
 {
-  auto feedback_to_st_node = std::make_shared<FollowWaypoints::Feedback>();
+  auto feedback_to_st_node = std::make_shared<NavigateThroughPoses::Feedback>();
   *feedback_to_st_node = *feedback;
   
   // アクティブなゴールハンドルにフィードバックを送信
@@ -118,8 +118,8 @@ void CrawlerdumpFollowWaypointsDeg::feedback_callback(
 
 
 //result
-void CrawlerdumpFollowWaypointsDeg::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
-                                             const GoalHandleFollowWaypoints::WrappedResult& result)
+void CrawlerdumpNavigateThroughPoses::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
+                                             const GoalHandleNavigateThroughPoses::WrappedResult& result)
 {
   if (!goal_handle->is_active())
   {
@@ -127,7 +127,7 @@ void CrawlerdumpFollowWaypointsDeg::result_callback(const std::shared_ptr<GoalHa
     return;
   }
 
-  auto result_to_st_node = std::make_shared<FollowWaypoints::Result>();
+  auto result_to_st_node = std::make_shared<NavigateThroughPoses::Result>();
   switch (result.code)
   {
     case rclcpp_action::ResultCode::SUCCEEDED:
@@ -156,7 +156,7 @@ int main(int argc, char* argv[])
     //   google::InstallFailureSignalHandler();
 
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<CrawlerdumpFollowWaypointsDeg>());
+    rclcpp::spin(std::make_shared<CrawlerdumpNavigateThroughPoses>());
     rclcpp::shutdown();
     return 0;
 }

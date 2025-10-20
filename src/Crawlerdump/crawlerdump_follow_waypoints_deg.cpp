@@ -13,34 +13,34 @@
 // limitations under the License.
 
 #include <vector>
-#include "tms_if_for_opera/CrawlerDump/crawlerdump_release_soil.hpp"
+#include "tms_if_for_opera/Crawlerdump/crawlerdump_follow_waypoints_deg.hpp"
 // #include <glog/logging.h>
 
 using std::placeholders::_1;
 using std::placeholders::_2;
 
-CrawlerDumpReleaseSoil::CrawlerDumpReleaseSoil() : rclcpp::Node("tms_if_crawlerdump_release_soil_node")
+CrawlerdumpFollowWaypointsDeg::CrawlerdumpFollowWaypointsDeg() : rclcpp::Node("tms_if_follow_waypoints_node")
 {
-    this->action_server_ = rclcpp_action::create_server<tms_msg_rp::action::TmsRpCrawlerDumpDumpAngle>(
-        this, "tms_rp_set_dump_angle",
-        std::bind(&CrawlerDumpReleaseSoil::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
-        std::bind(&CrawlerDumpReleaseSoil::handle_cancel, this, std::placeholders::_1),
-        std::bind(&CrawlerDumpReleaseSoil::handle_accepted, this, std::placeholders::_1));
+    this->action_server_ = rclcpp_action::create_server<FollowWaypoints>(
+        this, "tms_rp_navigate_follow_waypoints",
+        std::bind(&CrawlerdumpFollowWaypointsDeg::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
+        std::bind(&CrawlerdumpFollowWaypointsDeg::handle_cancel, this, std::placeholders::_1),
+        std::bind(&CrawlerdumpFollowWaypointsDeg::handle_accepted, this, std::placeholders::_1));
 
     
-    action_client_ = rclcpp_action::create_client<SetDumpAngle>(this, "set_dump_angle");
+    action_client_ = rclcpp_action::create_client<FollowWaypoints>(this, "follow_waypoints");
 }
 
-rclcpp_action::GoalResponse CrawlerDumpReleaseSoil::handle_goal(
-    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const tms_msg_rp::action::TmsRpCrawlerDumpDumpAngle::Goal> goal)
+rclcpp_action::GoalResponse CrawlerdumpFollowWaypointsDeg::handle_goal(
+    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const FollowWaypoints::Goal> goal)
 {
     RCLCPP_INFO(this->get_logger(), "Received goal request");
     return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
-rclcpp_action::CancelResponse CrawlerDumpReleaseSoil::handle_cancel(const std::shared_ptr<GoalHandle> goal_handle)
+rclcpp_action::CancelResponse CrawlerdumpFollowWaypointsDeg::handle_cancel(const std::shared_ptr<GoalHandle> goal_handle)
 {
-    RCLCPP_INFO(this->get_logger(), "Received request to cancel tms_if_crawlerdump_release_soil_node node");
+    RCLCPP_INFO(this->get_logger(), "Received request to cancel tms_if_follow_waypoints_node node");
     if (client_future_goal_handle_.valid() &&
         client_future_goal_handle_.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
     {
@@ -50,17 +50,18 @@ rclcpp_action::CancelResponse CrawlerDumpReleaseSoil::handle_cancel(const std::s
     return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-void CrawlerDumpReleaseSoil::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
+void CrawlerdumpFollowWaypointsDeg::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
 {
     using namespace std::placeholders;
-    std::thread{ std::bind(&CrawlerDumpReleaseSoil::execute, this, _1), goal_handle }.detach();
+    std::thread{ std::bind(&CrawlerdumpFollowWaypointsDeg::execute, this, _1), goal_handle }.detach();
 }
 
-void CrawlerDumpReleaseSoil::execute(const std::shared_ptr<GoalHandle> goal_handle)
+void CrawlerdumpFollowWaypointsDeg::execute(const std::shared_ptr<GoalHandle> goal_handle)
 {
-    RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_crawlerdump_release_soil) is executing...");
+    RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_follow_waypoints_node) is executing...");
     current_goal_handle_ = goal_handle;
-    auto result = std::make_shared<tms_msg_rp::action::TmsRpCrawlerDumpDumpAngle::Result>();
+
+    auto result = std::make_shared<FollowWaypoints::Result>();
     auto handle_error = [&](const std::string& message) {
         if (goal_handle->is_active())
         {
@@ -73,12 +74,11 @@ void CrawlerDumpReleaseSoil::execute(const std::shared_ptr<GoalHandle> goal_hand
         }
     };
 
-    auto goal_msg = SetDumpAngle::Goal();
     auto received_goal = goal_handle->get_goal();
-    goal_msg.target_angle = received_goal->target_angle;
+    auto goal_msg = *received_goal;
 
     //進捗状況を表示するFeedbackコールバックを設�?
-    auto send_goal_options = rclcpp_action::Client<SetDumpAngle>::SendGoalOptions();
+    auto send_goal_options = rclcpp_action::Client<FollowWaypoints>::SendGoalOptions();
     send_goal_options.goal_response_callback = [this](const auto& goal_handle) { goal_response_callback(goal_handle); };
     send_goal_options.feedback_callback = [this](const auto tmp, const auto feedback) {
         feedback_callback(tmp, feedback);
@@ -90,7 +90,7 @@ void CrawlerDumpReleaseSoil::execute(const std::shared_ptr<GoalHandle> goal_hand
     client_future_goal_handle_ = action_client_->async_send_goal(goal_msg, send_goal_options);
 }
 
-void CrawlerDumpReleaseSoil::goal_response_callback(const GoalHandleCrawlerDumpReleaseSoil::SharedPtr& goal_handle)
+void CrawlerdumpFollowWaypointsDeg::goal_response_callback(const GoalHandleFollowWaypoints::SharedPtr& goal_handle)
 {
   if (!goal_handle)
   {
@@ -103,17 +103,23 @@ void CrawlerDumpReleaseSoil::goal_response_callback(const GoalHandleCrawlerDumpR
 }
 
   
-void CrawlerDumpReleaseSoil::feedback_callback(
-    const GoalHandleCrawlerDumpReleaseSoil::SharedPtr,
-    const std::shared_ptr<const GoalHandleCrawlerDumpReleaseSoil::Feedback> feedback)
+void CrawlerdumpFollowWaypointsDeg::feedback_callback(
+    const GoalHandleFollowWaypoints::SharedPtr,
+    const std::shared_ptr<const GoalHandleFollowWaypoints::Feedback> feedback)
 {
-
+  auto feedback_to_st_node = std::make_shared<FollowWaypoints::Feedback>();
+  *feedback_to_st_node = *feedback;
+  
+  // アクティブなゴールハンドルにフィードバックを送信
+  if (current_goal_handle_ && current_goal_handle_->is_active()) {
+    current_goal_handle_->publish_feedback(feedback_to_st_node);
+  }
 }
 
 
 //result
-void CrawlerDumpReleaseSoil::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
-                                             const GoalHandleCrawlerDumpReleaseSoil::WrappedResult& result)
+void CrawlerdumpFollowWaypointsDeg::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
+                                             const GoalHandleFollowWaypoints::WrappedResult& result)
 {
   if (!goal_handle->is_active())
   {
@@ -121,20 +127,20 @@ void CrawlerDumpReleaseSoil::result_callback(const std::shared_ptr<GoalHandle> g
     return;
   }
 
-  auto result_to_st_node = std::make_shared<tms_msg_rp::action::TmsRpCrawlerDumpDumpAngle::Result>();
+  auto result_to_st_node = std::make_shared<FollowWaypoints::Result>();
   switch (result.code)
   {
     case rclcpp_action::ResultCode::SUCCEEDED:
       goal_handle->succeed(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if release_soil is succeeded");
+      RCLCPP_INFO(this->get_logger(), "tms if crawlerdump execution is succeeded");
       break;
     case rclcpp_action::ResultCode::ABORTED:
       goal_handle->abort(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if release_soil is aborted");
+      RCLCPP_INFO(this->get_logger(), "tms if crawlerdump execution is aborted");
       break;
     case rclcpp_action::ResultCode::CANCELED:
       goal_handle->canceled(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if release_soil is canceled");
+      RCLCPP_INFO(this->get_logger(), "tms if crawlerdump execution is canceled");
       break;
     default:
       goal_handle->abort(result_to_st_node);
@@ -150,7 +156,7 @@ int main(int argc, char* argv[])
     //   google::InstallFailureSignalHandler();
 
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<CrawlerDumpReleaseSoil>());
+    rclcpp::spin(std::make_shared<CrawlerdumpFollowWaypointsDeg>());
     rclcpp::shutdown();
     return 0;
 }

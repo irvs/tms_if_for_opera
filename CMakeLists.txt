@@ -111,7 +111,7 @@ foreach(TARGET ${EXCAVATOR_TARGETS})
 endforeach()
 
 foreach(TARGET ${CRAWLERDUMP_TARGETS})
-  add_executable(${TARGET} src/CrawlerDump/${TARGET}.cpp)
+  add_executable(${TARGET} src/Crawlerdump/${TARGET}.cpp)
   ament_target_dependencies(${TARGET} ${COMMON_DEPENDENCIES})
   target_include_directories(${TARGET} PRIVATE ${COMMON_INCLUDE_DIRS})
   target_link_directories(${TARGET} PUBLIC ${COMMON_LINK_DIRS})

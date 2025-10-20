@@ -13,34 +13,34 @@
 // limitations under the License.
 
 #include <vector>
-#include "tms_if_for_opera/CrawlerDump/crawlerdump_navigate_through_poses_deg.hpp"
+#include "tms_if_for_opera/Crawlerdump/crawlerdump_swing.hpp"
 // #include <glog/logging.h>
 
 using std::placeholders::_1;
 using std::placeholders::_2;
 
-CrawlerdumpNavigateThroughPosesDeg::CrawlerdumpNavigateThroughPosesDeg() : rclcpp::Node("tms_if_navigate_through_poses_deg_node")
+CrawlerdumpSwing::CrawlerdumpSwing() : rclcpp::Node("tms_if_crawlerdump_swing_node")
 {
-    this->action_server_ = rclcpp_action::create_server<NavigateThroughPoses>(
-        this, "tms_rp_navigate_through_poses_deg",
-        std::bind(&CrawlerdumpNavigateThroughPosesDeg::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
-        std::bind(&CrawlerdumpNavigateThroughPosesDeg::handle_cancel, this, std::placeholders::_1),
-        std::bind(&CrawlerdumpNavigateThroughPosesDeg::handle_accepted, this, std::placeholders::_1));
+    this->action_server_ = rclcpp_action::create_server<tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle>(
+        this, "tms_rp_set_swing_angle",
+        std::bind(&CrawlerdumpSwing::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
+        std::bind(&CrawlerdumpSwing::handle_cancel, this, std::placeholders::_1),
+        std::bind(&CrawlerdumpSwing::handle_accepted, this, std::placeholders::_1));
 
     
-    action_client_ = rclcpp_action::create_client<NavigateThroughPoses>(this, "navigate_through_poses");
+    action_client_ = rclcpp_action::create_client<SetSwingAngle>(this, "set_swing_angle");
 }
 
-rclcpp_action::GoalResponse CrawlerdumpNavigateThroughPosesDeg::handle_goal(
-    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const NavigateThroughPoses::Goal> goal)
+rclcpp_action::GoalResponse CrawlerdumpSwing::handle_goal(
+    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle::Goal> goal)
 {
     RCLCPP_INFO(this->get_logger(), "Received goal request");
     return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
-rclcpp_action::CancelResponse CrawlerdumpNavigateThroughPosesDeg::handle_cancel(const std::shared_ptr<GoalHandle> goal_handle)
+rclcpp_action::CancelResponse CrawlerdumpSwing::handle_cancel(const std::shared_ptr<GoalHandle> goal_handle)
 {
-    RCLCPP_INFO(this->get_logger(), "Received request to cancel tms_if_navigate_through_poses_deg_node node");
+    RCLCPP_INFO(this->get_logger(), "Received request to cancel tms_if_crawlerdump_swing node");
     if (client_future_goal_handle_.valid() &&
         client_future_goal_handle_.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
     {
@@ -50,18 +50,17 @@ rclcpp_action::CancelResponse CrawlerdumpNavigateThroughPosesDeg::handle_cancel(
     return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-void CrawlerdumpNavigateThroughPosesDeg::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
+void CrawlerdumpSwing::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
 {
     using namespace std::placeholders;
-    std::thread{ std::bind(&CrawlerdumpNavigateThroughPosesDeg::execute, this, _1), goal_handle }.detach();
+    std::thread{ std::bind(&CrawlerdumpSwing::execute, this, _1), goal_handle }.detach();
 }
 
-void CrawlerdumpNavigateThroughPosesDeg::execute(const std::shared_ptr<GoalHandle> goal_handle)
+void CrawlerdumpSwing::execute(const std::shared_ptr<GoalHandle> goal_handle)
 {
-    RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_navigate_through_poses_deg_node) is executing...");
+    RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_crawlerdump_swing_node) is executing...");
     current_goal_handle_ = goal_handle;
-
-    auto result = std::make_shared<NavigateThroughPoses::Result>();
+    auto result = std::make_shared<tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle::Result>();
     auto handle_error = [&](const std::string& message) {
         if (goal_handle->is_active())
         {
@@ -74,11 +73,12 @@ void CrawlerdumpNavigateThroughPosesDeg::execute(const std::shared_ptr<GoalHandl
         }
     };
 
+    auto goal_msg = SetSwingAngle::Goal();
     auto received_goal = goal_handle->get_goal();
-    auto goal_msg = *received_goal;
+    goal_msg.target_angle = received_goal->target_angle;
 
     //進捗状況を表示するFeedbackコールバックを設�?
-    auto send_goal_options = rclcpp_action::Client<NavigateThroughPoses>::SendGoalOptions();
+    auto send_goal_options = rclcpp_action::Client<SetSwingAngle>::SendGoalOptions();
     send_goal_options.goal_response_callback = [this](const auto& goal_handle) { goal_response_callback(goal_handle); };
     send_goal_options.feedback_callback = [this](const auto tmp, const auto feedback) {
         feedback_callback(tmp, feedback);
@@ -90,7 +90,7 @@ void CrawlerdumpNavigateThroughPosesDeg::execute(const std::shared_ptr<GoalHandl
     client_future_goal_handle_ = action_client_->async_send_goal(goal_msg, send_goal_options);
 }
 
-void CrawlerdumpNavigateThroughPosesDeg::goal_response_callback(const GoalHandleNavigateThroughPoses::SharedPtr& goal_handle)
+void CrawlerdumpSwing::goal_response_callback(const GoalHandleCrawlerdumpSwing::SharedPtr& goal_handle)
 {
   if (!goal_handle)
   {
@@ -103,23 +103,17 @@ void CrawlerdumpNavigateThroughPosesDeg::goal_response_callback(const GoalHandle
 }
 
   
-void CrawlerdumpNavigateThroughPosesDeg::feedback_callback(
-    const GoalHandleNavigateThroughPoses::SharedPtr,
-    const std::shared_ptr<const GoalHandleNavigateThroughPoses::Feedback> feedback)
+void CrawlerdumpSwing::feedback_callback(
+    const GoalHandleCrawlerdumpSwing::SharedPtr,
+    const std::shared_ptr<const GoalHandleCrawlerdumpSwing::Feedback> feedback)
 {
-  auto feedback_to_st_node = std::make_shared<NavigateThroughPoses::Feedback>();
-  *feedback_to_st_node = *feedback;
-  
-  // アクティブなゴールハンドルにフィードバックを送信
-  if (current_goal_handle_ && current_goal_handle_->is_active()) {
-    current_goal_handle_->publish_feedback(feedback_to_st_node);
-  }
+
 }
 
 
 //result
-void CrawlerdumpNavigateThroughPosesDeg::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
-                                             const GoalHandleNavigateThroughPoses::WrappedResult& result)
+void CrawlerdumpSwing::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
+                                             const GoalHandleCrawlerdumpSwing::WrappedResult& result)
 {
   if (!goal_handle->is_active())
   {
@@ -127,20 +121,20 @@ void CrawlerdumpNavigateThroughPosesDeg::result_callback(const std::shared_ptr<G
     return;
   }
 
-  auto result_to_st_node = std::make_shared<NavigateThroughPoses::Result>();
+  auto result_to_st_node = std::make_shared<tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle::Result>();
   switch (result.code)
   {
     case rclcpp_action::ResultCode::SUCCEEDED:
       goal_handle->succeed(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if crawlerdump execution is succeeded");
+      RCLCPP_INFO(this->get_logger(), "tms if swing is succeeded");
       break;
     case rclcpp_action::ResultCode::ABORTED:
       goal_handle->abort(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if crawlerdump execution is aborted");
+      RCLCPP_INFO(this->get_logger(), "tms if swing is aborted");
       break;
     case rclcpp_action::ResultCode::CANCELED:
       goal_handle->canceled(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if crawlerdump execution is canceled");
+      RCLCPP_INFO(this->get_logger(), "tms if swing is canceled");
       break;
     default:
       goal_handle->abort(result_to_st_node);
@@ -156,7 +150,7 @@ int main(int argc, char* argv[])
     //   google::InstallFailureSignalHandler();
 
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<CrawlerdumpNavigateThroughPosesDeg>());
+    rclcpp::spin(std::make_shared<CrawlerdumpSwing>());
     rclcpp::shutdown();
     return 0;
 }
