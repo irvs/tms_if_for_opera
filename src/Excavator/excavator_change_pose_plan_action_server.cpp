@@ -1,4 +1,4 @@
-#include "tms_if_for_opera/moveit2/moveit2_change_pose_action_server.hpp"
+#include "tms_if_for_opera/Excavator/excavator_change_pose_action_server.hpp"
 
 // #include <moveit_msgs/msg/constraints.hpp>
 // #include <moveit_msgs/msg/orientation_constraint.hpp>
@@ -14,8 +14,8 @@
 
 using namespace tms_if_for_opera;
 
-Moveit2ChangePoseActionServer::Moveit2ChangePoseActionServer(const rclcpp::NodeOptions& options)
-  : Node("tms_if_for_opera_moveit2_change_pose_plan", options)
+ExcavatorChangePoseActionServer::ExcavatorChangePoseActionServer(const rclcpp::NodeOptions& options)
+  : Node("tms_if_for_opera_excavator_change_pose_plan", options)
 {
   this->declare_parameter<std::string>("robot_description", "");
   this->get_parameter("robot_description", robot_description_);
@@ -58,9 +58,9 @@ Moveit2ChangePoseActionServer::Moveit2ChangePoseActionServer(const rclcpp::NodeO
   using namespace std::placeholders;
 
   action_server_ = rclcpp_action::create_server<ExcavatorChangePose>(
-      this, "tms_rp_change_pose_plan", std::bind(&Moveit2ChangePoseActionServer::handle_goal, this, _1, _2),
-      std::bind(&Moveit2ChangePoseActionServer::handle_cancel, this, _1),
-      std::bind(&Moveit2ChangePoseActionServer::handle_accepted, this, _1));
+      this, "tms_rp_change_pose_plan", std::bind(&ExcavatorChangePoseActionServer::handle_goal, this, _1, _2),
+      std::bind(&ExcavatorChangePoseActionServer::handle_cancel, this, _1),
+      std::bind(&ExcavatorChangePoseActionServer::handle_accepted, this, _1));
   /****/
 
   /* Setup movegroup interface */
@@ -95,7 +95,7 @@ Moveit2ChangePoseActionServer::Moveit2ChangePoseActionServer(const rclcpp::NodeO
   this->emg_stop_publisher_ = this->create_publisher<std_msgs::msg::Bool>("emg_stop", 10);
 }
 
-rclcpp_action::GoalResponse Moveit2ChangePoseActionServer::handle_goal(const rclcpp_action::GoalUUID& uuid,
+rclcpp_action::GoalResponse ExcavatorChangePoseActionServer::handle_goal(const rclcpp_action::GoalUUID& uuid,
                                                                      std::shared_ptr<const ExcavatorChangePose::Goal> goal)
 {
   RCLCPP_INFO(this->get_logger(), "Received goal request");
@@ -104,9 +104,9 @@ rclcpp_action::GoalResponse Moveit2ChangePoseActionServer::handle_goal(const rcl
 }
 
 rclcpp_action::CancelResponse
-Moveit2ChangePoseActionServer::handle_cancel(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
+ExcavatorChangePoseActionServer::handle_cancel(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
 {
-  RCLCPP_INFO(this->get_logger(), "Publishing EMG stop signal to Moveit2.");
+  RCLCPP_INFO(this->get_logger(), "Publishing EMG stop signal to Excavator.");
 
   // 実機用非常停止
   std_msgs::msg::Bool msg;
@@ -121,15 +121,15 @@ Moveit2ChangePoseActionServer::handle_cancel(const std::shared_ptr<GoalHandleExc
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-void Moveit2ChangePoseActionServer::handle_accepted(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
+void ExcavatorChangePoseActionServer::handle_accepted(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
 {
   RCLCPP_INFO(this->get_logger(), "handle_accepted() start.");
   using namespace std::placeholders;
   // this needs to return quickly to avoid blocking the executor, so spin up a new thread
-  std::thread{ std::bind(&Moveit2ChangePoseActionServer::execute, this, _1), goal_handle }.detach();
+  std::thread{ std::bind(&ExcavatorChangePoseActionServer::execute, this, _1), goal_handle }.detach();
 }
 
-void Moveit2ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
+void ExcavatorChangePoseActionServer::execute(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
 {
   // Apply collision object
   apply_collision_objects_from_db(collision_object_record_name_);
@@ -349,7 +349,7 @@ void Moveit2ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleExca
   }
 }
 
-void Moveit2ChangePoseActionServer::apply_collision_objects_from_db(const std::string& record_name)
+void ExcavatorChangePoseActionServer::apply_collision_objects_from_db(const std::string& record_name)
 {
   // Load collision objects from DB
   // RCLCPP_INFO(this->get_logger(), "Loading collision objects from DB");
@@ -428,7 +428,7 @@ void Moveit2ChangePoseActionServer::apply_collision_objects_from_db(const std::s
   }
 }
 
-void Moveit2ChangePoseActionServer::apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names)
+void ExcavatorChangePoseActionServer::apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names)
 {
   for (const auto& record_name : record_names)
   {
@@ -497,7 +497,7 @@ void Moveit2ChangePoseActionServer::apply_collision_objects_mesh_from_db(const s
   }
 }
 
-double Moveit2ChangePoseActionServer::getDoubleValue(const bsoncxx::document::element& element)
+double ExcavatorChangePoseActionServer::getDoubleValue(const bsoncxx::document::element& element)
 {
   if (element.type() == bsoncxx::type::k_double)
   {
@@ -516,7 +516,7 @@ double Moveit2ChangePoseActionServer::getDoubleValue(const bsoncxx::document::el
 int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<Moveit2ChangePoseActionServer>());
+  rclcpp::spin(std::make_shared<ExcavatorChangePoseActionServer>());
   rclcpp::shutdown();
   return 0;
 }

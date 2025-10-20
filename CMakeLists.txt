@@ -10,33 +10,36 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# MoveIt2関連のターゲット
-set(MOVEIT2_TARGETS
-  moveit2_change_pose_action_server
-  moveit2_change_pose_plan_action_server
-  moveit2_level_action_server
-  moveit2_gather_action_server
-  moveit2_excavate_simple_action_server
-  moveit2_excavate_simple_plan_action_server
-  moveit2_release_simple_action_server
+set(EXCAVATOR_TARGETS
+  excavator_change_pose_action_server
+  excavator_change_pose_plan_action_server
+  excavator_level_action_server
+  excavator_gather_action_server
+  excavator_excavate_simple_action_server
+  excavator_excavate_simple_plan_action_server
+  excavator_release_simple_action_server
   scene_manager
 )
 
-# Navigation2関連のターゲット
-set(NAVIGATION2_TARGETS
-  navigation2_navigate_through_poses
-  navigation2_navigate_through_poses_deg
-  navigation2_navigate_anywhere
-  navigation2_navigate_anywhere_deg
-  navigation2_follow_waypoints
-  navigation2_follow_waypoints_deg
-)
-
-# その他のターゲット
-set(OTHERS_TARGETS
+set(CRAWLERDUMP_TARGETS
+  crawlerdump_navigate_through_poses
+  crawlerdump_navigate_through_poses_deg
+  crawlerdump_navigate_anywhere
+  crawlerdump_navigate_anywhere_deg
+  crawlerdump_follow_waypoints
+  crawlerdump_follow_waypoints_deg
   crawlerdump_release_soil
   crawlerdump_swing
   crawlerdump_swing_align_to_heading
+)
+
+set(BULLDOZER_TARGETS
+  bulldozer_navigate_through_poses
+  bulldozer_navigate_through_poses_deg
+  bulldozer_navigate_anywhere
+  bulldozer_navigate_anywhere_deg
+  bulldozer_follow_waypoints
+  bulldozer_follow_waypoints_deg
 )
 
 find_package(ament_cmake REQUIRED)
@@ -54,9 +57,12 @@ find_package(mongocxx REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(com3_msgs REQUIRED)
 
-add_library(excavator_ik SHARED src/excavator_ik.cpp)
-add_library(excavator_pose_converter SHARED src/excavator_pose_converter.cpp)
+add_library(excavator_ik SHARED src/Excavator/lib/excavator_ik.cpp)
+add_library(excavator_pose_converter SHARED src/Excavator/lib/excavator_pose_converter.cpp)
 ament_target_dependencies(excavator_ik rclcpp urdf)
+
+target_include_directories(excavator_ik PUBLIC include)
+target_include_directories(excavator_pose_converter PUBLIC include)
 
 set(COMMON_DEPENDENCIES
   "rclcpp"
@@ -95,8 +101,8 @@ set(COMMON_LINK_LIBS
   excavator_pose_converter
 )
 
-foreach(TARGET ${MOVEIT2_TARGETS})
-  add_executable(${TARGET} src/moveit2/${TARGET}.cpp)
+foreach(TARGET ${EXCAVATOR_TARGETS})
+  add_executable(${TARGET} src/Excavator/${TARGET}.cpp)
   ament_target_dependencies(${TARGET} ${COMMON_DEPENDENCIES})
   target_include_directories(${TARGET} PRIVATE ${COMMON_INCLUDE_DIRS})
   target_link_directories(${TARGET} PUBLIC ${COMMON_LINK_DIRS})
@@ -104,8 +110,8 @@ foreach(TARGET ${MOVEIT2_TARGETS})
   install(TARGETS ${TARGET} DESTINATION lib/${PROJECT_NAME})
 endforeach()
 
-foreach(TARGET ${NAVIGATION2_TARGETS})
-  add_executable(${TARGET} src/navigation2/${TARGET}.cpp)
+foreach(TARGET ${CRAWLERDUMP_TARGETS})
+  add_executable(${TARGET} src/CrawlerDump/${TARGET}.cpp)
   ament_target_dependencies(${TARGET} ${COMMON_DEPENDENCIES})
   target_include_directories(${TARGET} PRIVATE ${COMMON_INCLUDE_DIRS})
   target_link_directories(${TARGET} PUBLIC ${COMMON_LINK_DIRS})
@@ -113,8 +119,8 @@ foreach(TARGET ${NAVIGATION2_TARGETS})
   install(TARGETS ${TARGET} DESTINATION lib/${PROJECT_NAME})
 endforeach()
 
-foreach(TARGET ${OTHERS_TARGETS})
-  add_executable(${TARGET} src/others/${TARGET}.cpp)
+foreach(TARGET ${BULLDOZER_TARGETS})
+  add_executable(${TARGET} src/Bulldozer/${TARGET}.cpp)
   ament_target_dependencies(${TARGET} ${COMMON_DEPENDENCIES})
   target_include_directories(${TARGET} PRIVATE ${COMMON_INCLUDE_DIRS})
   target_link_directories(${TARGET} PUBLIC ${COMMON_LINK_DIRS})

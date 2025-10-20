@@ -1,5 +1,5 @@
-#ifndef MOVEIT2_EXCAVATE_SIMPLE_ACTION_SERVER_HPP_
-#define MOVEIT2_EXCAVATE_SIMPLE_ACTION_SERVER_HPP_
+#ifndef EXCAVATOR_EXCAVATE_SIMPLE_ACTION_SERVER_HPP_
+#define EXCAVATOR_EXCAVATE_SIMPLE_ACTION_SERVER_HPP_
 
 #include <functional>
 #include <memory>
@@ -36,7 +36,7 @@
 #include <mongocxx/client.hpp>
 #include <mongocxx/instance.hpp>
 
-#include "tms_if_for_opera/excavator_ik.hpp"
+#include "tms_if_for_opera/Excavator/lib/excavator_ik.hpp"
 
 #include <fstream>
 
@@ -46,13 +46,13 @@
 
 namespace tms_if_for_opera
 {
-class Moveit2ExcavateSimpleActionServer : public rclcpp::Node
+class ExcavatorExcavateSimpleActionServer : public rclcpp::Node
 {
 public:
   using ExcavatorExcavateSimple = tms_msg_rp::action::TmsRpExcavatorExcavateSimple;
   using GoalHandleExcavatorExcavateSimple = rclcpp_action::ServerGoalHandle<ExcavatorExcavateSimple>;
 
-  explicit Moveit2ExcavateSimpleActionServer(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
+  explicit ExcavatorExcavateSimpleActionServer(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
 
 private:
   std::string planning_group_;
@@ -101,4 +101,4 @@ private:
 };
 }  // namespace tms_if_for_opera
 
-#endif  // MOVEIT2_EXCAVATE_SIMPLE_ACTION_SERVER_HPP_
+#endif  // EXCAVATOR_EXCAVATE_SIMPLE_ACTION_SERVER_HPP_

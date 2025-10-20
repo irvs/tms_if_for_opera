@@ -13,32 +13,32 @@
 // limitations under the License.
 
 #include <vector>
-#include "tms_if_for_opera/navigation2/navigation2_navigate_anywhere.hpp"
+#include "tms_if_for_opera/CrawlerDump/crawlerdump_navigate_anywhere.hpp"
 // #include <glog/logging.h>
 
 using std::placeholders::_1;
 using std::placeholders::_2;
 
-Navigation2NavigateAnywhere::Navigation2NavigateAnywhere() : rclcpp::Node("tms_if_navigate_anywhere_node")
+CrawlerdumpNavigateAnywhere::CrawlerdumpNavigateAnywhere() : rclcpp::Node("tms_if_navigate_anywhere_node")
 {
     this->action_server_ = rclcpp_action::create_server<NavigateToPose>(
         this, "tms_rp_navigate_anywhere",
-        std::bind(&Navigation2NavigateAnywhere::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
-        std::bind(&Navigation2NavigateAnywhere::handle_cancel, this, std::placeholders::_1),
-        std::bind(&Navigation2NavigateAnywhere::handle_accepted, this, std::placeholders::_1));
+        std::bind(&CrawlerdumpNavigateAnywhere::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
+        std::bind(&CrawlerdumpNavigateAnywhere::handle_cancel, this, std::placeholders::_1),
+        std::bind(&CrawlerdumpNavigateAnywhere::handle_accepted, this, std::placeholders::_1));
 
     
     action_client_ = rclcpp_action::create_client<NavigateToPose>(this, "navigate_to_pose");
 }
 
-rclcpp_action::GoalResponse Navigation2NavigateAnywhere::handle_goal(
+rclcpp_action::GoalResponse CrawlerdumpNavigateAnywhere::handle_goal(
     const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const NavigateToPose::Goal> goal)
 {
     RCLCPP_INFO(this->get_logger(), "Received goal request");
     return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
-rclcpp_action::CancelResponse Navigation2NavigateAnywhere::handle_cancel(const std::shared_ptr<GoalHandle> goal_handle)
+rclcpp_action::CancelResponse CrawlerdumpNavigateAnywhere::handle_cancel(const std::shared_ptr<GoalHandle> goal_handle)
 {
     RCLCPP_INFO(this->get_logger(), "Received request to cancel tms_if_navigate_anywhere_node node");
     if (client_future_goal_handle_.valid() &&
@@ -50,13 +50,13 @@ rclcpp_action::CancelResponse Navigation2NavigateAnywhere::handle_cancel(const s
     return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-void Navigation2NavigateAnywhere::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
+void CrawlerdumpNavigateAnywhere::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
 {
     using namespace std::placeholders;
-    std::thread{ std::bind(&Navigation2NavigateAnywhere::execute, this, _1), goal_handle }.detach();
+    std::thread{ std::bind(&CrawlerdumpNavigateAnywhere::execute, this, _1), goal_handle }.detach();
 }
 
-void Navigation2NavigateAnywhere::execute(const std::shared_ptr<GoalHandle> goal_handle)
+void CrawlerdumpNavigateAnywhere::execute(const std::shared_ptr<GoalHandle> goal_handle)
 {
     RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_navigate_anywhere_node) is executing...");
     current_goal_handle_ = goal_handle;
@@ -90,7 +90,7 @@ void Navigation2NavigateAnywhere::execute(const std::shared_ptr<GoalHandle> goal
     client_future_goal_handle_ = action_client_->async_send_goal(goal_msg, send_goal_options);
 }
 
-void Navigation2NavigateAnywhere::goal_response_callback(const GoalHandleNavigateToPose::SharedPtr& goal_handle)
+void CrawlerdumpNavigateAnywhere::goal_response_callback(const GoalHandleNavigateToPose::SharedPtr& goal_handle)
 {
   if (!goal_handle)
   {
@@ -103,7 +103,7 @@ void Navigation2NavigateAnywhere::goal_response_callback(const GoalHandleNavigat
 }
 
   
-void Navigation2NavigateAnywhere::feedback_callback(
+void CrawlerdumpNavigateAnywhere::feedback_callback(
     const GoalHandleNavigateToPose::SharedPtr,
     const std::shared_ptr<const GoalHandleNavigateToPose::Feedback> feedback)
 {
@@ -118,7 +118,7 @@ void Navigation2NavigateAnywhere::feedback_callback(
 
 
 //result
-void Navigation2NavigateAnywhere::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
+void CrawlerdumpNavigateAnywhere::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
                                              const GoalHandleNavigateToPose::WrappedResult& result)
 {
   if (!goal_handle->is_active())
@@ -132,15 +132,15 @@ void Navigation2NavigateAnywhere::result_callback(const std::shared_ptr<GoalHand
   {
     case rclcpp_action::ResultCode::SUCCEEDED:
       goal_handle->succeed(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if navigation2 execution is succeeded");
+      RCLCPP_INFO(this->get_logger(), "tms if crawlerdump execution is succeeded");
       break;
     case rclcpp_action::ResultCode::ABORTED:
       goal_handle->abort(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if navigation2 execution is aborted");
+      RCLCPP_INFO(this->get_logger(), "tms if crawlerdump execution is aborted");
       break;
     case rclcpp_action::ResultCode::CANCELED:
       goal_handle->canceled(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if navigation2 execution is canceled");
+      RCLCPP_INFO(this->get_logger(), "tms if crawlerdump execution is canceled");
       break;
     default:
       goal_handle->abort(result_to_st_node);
@@ -156,7 +156,7 @@ int main(int argc, char* argv[])
     //   google::InstallFailureSignalHandler();
 
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<Navigation2NavigateAnywhere>());
+    rclcpp::spin(std::make_shared<CrawlerdumpNavigateAnywhere>());
     rclcpp::shutdown();
     return 0;
 }

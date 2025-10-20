@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef NAVIGATION2_FOLLOW_WAYPOINTS_DEG_HPP
-#define NAVIGATION2_FOLLOW_WAYPOINTS_DEG_HPP
+#ifndef CRAWLERDUMP_FOLLOW_WAYPOINTS_DEG_HPP
+#define CRAWLERDUMP_FOLLOW_WAYPOINTS_DEG_HPP
 
 #include <memory>
 #include <map>
@@ -34,13 +34,13 @@
 #include "nav2_msgs/action/follow_waypoints.hpp"
 
 
-class Navigation2FollowWaypointsDeg : public rclcpp::Node
+class CrawlerdumpFollowWaypointsDeg : public rclcpp::Node
 {
 public:
     using FollowWaypoints = nav2_msgs::action::FollowWaypoints;
     using GoalHandle = rclcpp_action::ServerGoalHandle<FollowWaypoints>;
     using GoalHandleFollowWaypoints = rclcpp_action::ClientGoalHandle<FollowWaypoints>;
-    Navigation2FollowWaypointsDeg();
+    CrawlerdumpFollowWaypointsDeg();
 
 
 private:

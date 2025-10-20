@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef NAVIGATION2_NAVIGATE_THROUGH_POSES_DEG_HPP
-#define NAVIGATION2_NAVIGATE_THROUGH_POSES_DEG_HPP
+#ifndef CRAWLERDUMP_NAVIGATE_THROUGH_POSES_DEG_HPP
+#define CRAWLERDUMP_NAVIGATE_THROUGH_POSES_DEG_HPP
 
 #include <memory>
 #include <map>
@@ -34,13 +34,13 @@
 #include "nav2_msgs/action/navigate_through_poses.hpp"
 
 
-class Navigation2NavigateThroughPosesDeg : public rclcpp::Node
+class CrawlerdumpNavigateThroughPosesDeg : public rclcpp::Node
 {
 public:
     using NavigateThroughPoses = nav2_msgs::action::NavigateThroughPoses;
     using GoalHandle = rclcpp_action::ServerGoalHandle<NavigateThroughPoses>;
     using GoalHandleNavigateThroughPoses = rclcpp_action::ClientGoalHandle<NavigateThroughPoses>;
-    Navigation2NavigateThroughPosesDeg();
+    CrawlerdumpNavigateThroughPosesDeg();
 
 
 private:

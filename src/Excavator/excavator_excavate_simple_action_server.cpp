@@ -1,4 +1,4 @@
-#include "tms_if_for_opera/moveit2/moveit2_excavate_simple_action_server.hpp"
+#include "tms_if_for_opera/Excavator/excavator_excavate_simple_action_server.hpp"
 
 // #include <moveit_msgs/msg/constraints.hpp>
 // #include <moveit_msgs/msg/orientation_constraint.hpp>
@@ -15,8 +15,8 @@
 
 using namespace tms_if_for_opera;
 
-Moveit2ExcavateSimpleActionServer::Moveit2ExcavateSimpleActionServer(const rclcpp::NodeOptions& options)
-  : Node("tms_if_for_opera_moveit2_excavate_simple", options)
+ExcavatorExcavateSimpleActionServer::ExcavatorExcavateSimpleActionServer(const rclcpp::NodeOptions& options)
+  : Node("tms_if_for_opera_excavator_excavate_simple", options)
 {
   this->declare_parameter<std::string>("robot_description", "");
   this->get_parameter("robot_description", robot_description_);
@@ -58,9 +58,9 @@ Moveit2ExcavateSimpleActionServer::Moveit2ExcavateSimpleActionServer(const rclcp
   using namespace std::placeholders;
 
   action_server_ = rclcpp_action::create_server<ExcavatorExcavateSimple>(
-      this, "tms_rp_excavate_simple", std::bind(&Moveit2ExcavateSimpleActionServer::handle_goal, this, _1, _2),
-      std::bind(&Moveit2ExcavateSimpleActionServer::handle_cancel, this, _1),
-      std::bind(&Moveit2ExcavateSimpleActionServer::handle_accepted, this, _1));
+      this, "tms_rp_excavate_simple", std::bind(&ExcavatorExcavateSimpleActionServer::handle_goal, this, _1, _2),
+      std::bind(&ExcavatorExcavateSimpleActionServer::handle_cancel, this, _1),
+      std::bind(&ExcavatorExcavateSimpleActionServer::handle_accepted, this, _1));
   /****/
 
   /* Setup movegroup interface */
@@ -97,7 +97,7 @@ Moveit2ExcavateSimpleActionServer::Moveit2ExcavateSimpleActionServer(const rclcp
   this->emg_stop_publisher_ = this->create_publisher<std_msgs::msg::Bool>("emg_stop", 10);
 }
 
-rclcpp_action::GoalResponse Moveit2ExcavateSimpleActionServer::handle_goal(
+rclcpp_action::GoalResponse ExcavatorExcavateSimpleActionServer::handle_goal(
     const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const ExcavatorExcavateSimple::Goal> goal)
 {
   RCLCPP_INFO(this->get_logger(), "Received goal request");
@@ -106,9 +106,9 @@ rclcpp_action::GoalResponse Moveit2ExcavateSimpleActionServer::handle_goal(
 }
 
 rclcpp_action::CancelResponse
-Moveit2ExcavateSimpleActionServer::handle_cancel(const std::shared_ptr<GoalHandleExcavatorExcavateSimple> goal_handle)
+ExcavatorExcavateSimpleActionServer::handle_cancel(const std::shared_ptr<GoalHandleExcavatorExcavateSimple> goal_handle)
 {
-  RCLCPP_INFO(this->get_logger(), "Publishing EMG stop signal to Moveit2.");
+  RCLCPP_INFO(this->get_logger(), "Publishing EMG stop signal to Excavator.");
 
   // 実機用非常停止
   std_msgs::msg::Bool msg;
@@ -123,15 +123,15 @@ Moveit2ExcavateSimpleActionServer::handle_cancel(const std::shared_ptr<GoalHandl
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-void Moveit2ExcavateSimpleActionServer::handle_accepted(const std::shared_ptr<GoalHandleExcavatorExcavateSimple> goal_handle)
+void ExcavatorExcavateSimpleActionServer::handle_accepted(const std::shared_ptr<GoalHandleExcavatorExcavateSimple> goal_handle)
 {
   RCLCPP_INFO(this->get_logger(), "handle_accepted() start.");
   using namespace std::placeholders;
   // this needs to return quickly to avoid blocking the executor, so spin up a new thread
-  std::thread{ std::bind(&Moveit2ExcavateSimpleActionServer::execute, this, _1), goal_handle }.detach();
+  std::thread{ std::bind(&ExcavatorExcavateSimpleActionServer::execute, this, _1), goal_handle }.detach();
 }
 
-void Moveit2ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleExcavatorExcavateSimple> goal_handle)
+void ExcavatorExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandleExcavatorExcavateSimple> goal_handle)
 {
   // Start to execute goal
   RCLCPP_INFO(this->get_logger(), "Executing goal");
@@ -495,7 +495,7 @@ void Moveit2ExcavateSimpleActionServer::execute(const std::shared_ptr<GoalHandle
   goal_handle->succeed(result);
 }
 
-void Moveit2ExcavateSimpleActionServer::apply_collision_objects_from_db(const std::string& record_name)
+void ExcavatorExcavateSimpleActionServer::apply_collision_objects_from_db(const std::string& record_name)
 {
   // Load collision objects from DB
   // RCLCPP_INFO(this->get_logger(), "Loading collision objects from DB");
@@ -574,7 +574,7 @@ void Moveit2ExcavateSimpleActionServer::apply_collision_objects_from_db(const st
   }
 }
 
-void Moveit2ExcavateSimpleActionServer::apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names)
+void ExcavatorExcavateSimpleActionServer::apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names)
 {
   for (const auto& record_name : record_names)
   {
@@ -643,7 +643,7 @@ void Moveit2ExcavateSimpleActionServer::apply_collision_objects_mesh_from_db(con
   }
 }
 
-double Moveit2ExcavateSimpleActionServer::getDoubleValue(const bsoncxx::document::element& element)
+double ExcavatorExcavateSimpleActionServer::getDoubleValue(const bsoncxx::document::element& element)
 {
   if (element.type() == bsoncxx::type::k_double)
   {
@@ -662,7 +662,7 @@ double Moveit2ExcavateSimpleActionServer::getDoubleValue(const bsoncxx::document
 int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<Moveit2ExcavateSimpleActionServer>());
+  rclcpp::spin(std::make_shared<ExcavatorExcavateSimpleActionServer>());
   rclcpp::shutdown();
   return 0;
 }

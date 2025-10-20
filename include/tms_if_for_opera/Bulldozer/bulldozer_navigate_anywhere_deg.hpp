@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef NAVIGATION2_NAVIGATE_ANYWHERE_DEG_HPP
-#define NAVIGATION2_NAVIGATE_ANYWHERE_DEG_HPP
+#ifndef BULLDOZER_NAVIGATE_ANYWHERE_DEG_HPP
+#define BULLDOZER_NAVIGATE_ANYWHERE_DEG_HPP
 
 #include <memory>
 #include <map>
@@ -34,13 +34,13 @@
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 
 
-class Navigation2NavigateAnywhereDeg : public rclcpp::Node
+class BulldozerNavigateAnywhereDeg : public rclcpp::Node
 {
 public:
     using NavigateToPose = nav2_msgs::action::NavigateToPose;
     using GoalHandle = rclcpp_action::ServerGoalHandle<NavigateToPose>;
     using GoalHandleNavigateToPose = rclcpp_action::ClientGoalHandle<NavigateToPose>;
-    Navigation2NavigateAnywhereDeg();
+    BulldozerNavigateAnywhereDeg();
 
 
 private:

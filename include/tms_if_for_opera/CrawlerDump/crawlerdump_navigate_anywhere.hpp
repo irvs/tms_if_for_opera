@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef NAVIGATION2_NAVIGATE_ANYWHERE_HPP
-#define NAVIGATION2_NAVIGATE_ANYWHERE_HPP
+#ifndef CRAWLERDUMP_NAVIGATE_ANYWHERE_HPP
+#define CRAWLERDUMP_NAVIGATE_ANYWHERE_HPP
 
 #include <memory>
 #include <map>
@@ -34,13 +34,13 @@
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 
 
-class Navigation2NavigateAnywhere : public rclcpp::Node
+class CrawlerdumpNavigateAnywhere : public rclcpp::Node
 {
 public:
     using NavigateToPose = nav2_msgs::action::NavigateToPose;
     using GoalHandle = rclcpp_action::ServerGoalHandle<NavigateToPose>;
     using GoalHandleNavigateToPose = rclcpp_action::ClientGoalHandle<NavigateToPose>;
-    Navigation2NavigateAnywhere();
+    CrawlerdumpNavigateAnywhere();
 
 
 private:

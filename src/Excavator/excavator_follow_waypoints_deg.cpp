@@ -13,32 +13,32 @@
 // limitations under the License.
 
 #include <vector>
-#include "tms_if_for_opera/navigation2/navigation2_follow_waypoints_deg.hpp"
+#include "tms_if_for_opera/Excavator/excavator_follow_waypoints_deg.hpp"
 // #include <glog/logging.h>
 
 using std::placeholders::_1;
 using std::placeholders::_2;
 
-Navigation2FollowWaypointsDeg::Navigation2FollowWaypointsDeg() : rclcpp::Node("tms_if_follow_waypoints_node")
+ExcavatorFollowWaypointsDeg::ExcavatorFollowWaypointsDeg() : rclcpp::Node("tms_if_follow_waypoints_node")
 {
     this->action_server_ = rclcpp_action::create_server<FollowWaypoints>(
         this, "tms_rp_navigate_follow_waypoints",
-        std::bind(&Navigation2FollowWaypointsDeg::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
-        std::bind(&Navigation2FollowWaypointsDeg::handle_cancel, this, std::placeholders::_1),
-        std::bind(&Navigation2FollowWaypointsDeg::handle_accepted, this, std::placeholders::_1));
+        std::bind(&ExcavatorFollowWaypointsDeg::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
+        std::bind(&ExcavatorFollowWaypointsDeg::handle_cancel, this, std::placeholders::_1),
+        std::bind(&ExcavatorFollowWaypointsDeg::handle_accepted, this, std::placeholders::_1));
 
     
     action_client_ = rclcpp_action::create_client<FollowWaypoints>(this, "follow_waypoints");
 }
 
-rclcpp_action::GoalResponse Navigation2FollowWaypointsDeg::handle_goal(
+rclcpp_action::GoalResponse ExcavatorFollowWaypointsDeg::handle_goal(
     const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const FollowWaypoints::Goal> goal)
 {
     RCLCPP_INFO(this->get_logger(), "Received goal request");
     return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
-rclcpp_action::CancelResponse Navigation2FollowWaypointsDeg::handle_cancel(const std::shared_ptr<GoalHandle> goal_handle)
+rclcpp_action::CancelResponse ExcavatorFollowWaypointsDeg::handle_cancel(const std::shared_ptr<GoalHandle> goal_handle)
 {
     RCLCPP_INFO(this->get_logger(), "Received request to cancel tms_if_follow_waypoints_node node");
     if (client_future_goal_handle_.valid() &&
@@ -50,13 +50,13 @@ rclcpp_action::CancelResponse Navigation2FollowWaypointsDeg::handle_cancel(const
     return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-void Navigation2FollowWaypointsDeg::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
+void ExcavatorFollowWaypointsDeg::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
 {
     using namespace std::placeholders;
-    std::thread{ std::bind(&Navigation2FollowWaypointsDeg::execute, this, _1), goal_handle }.detach();
+    std::thread{ std::bind(&ExcavatorFollowWaypointsDeg::execute, this, _1), goal_handle }.detach();
 }
 
-void Navigation2FollowWaypointsDeg::execute(const std::shared_ptr<GoalHandle> goal_handle)
+void ExcavatorFollowWaypointsDeg::execute(const std::shared_ptr<GoalHandle> goal_handle)
 {
     RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_follow_waypoints_node) is executing...");
     current_goal_handle_ = goal_handle;
@@ -90,7 +90,7 @@ void Navigation2FollowWaypointsDeg::execute(const std::shared_ptr<GoalHandle> go
     client_future_goal_handle_ = action_client_->async_send_goal(goal_msg, send_goal_options);
 }
 
-void Navigation2FollowWaypointsDeg::goal_response_callback(const GoalHandleFollowWaypoints::SharedPtr& goal_handle)
+void ExcavatorFollowWaypointsDeg::goal_response_callback(const GoalHandleFollowWaypoints::SharedPtr& goal_handle)
 {
   if (!goal_handle)
   {
@@ -103,7 +103,7 @@ void Navigation2FollowWaypointsDeg::goal_response_callback(const GoalHandleFollo
 }
 
   
-void Navigation2FollowWaypointsDeg::feedback_callback(
+void ExcavatorFollowWaypointsDeg::feedback_callback(
     const GoalHandleFollowWaypoints::SharedPtr,
     const std::shared_ptr<const GoalHandleFollowWaypoints::Feedback> feedback)
 {
@@ -118,7 +118,7 @@ void Navigation2FollowWaypointsDeg::feedback_callback(
 
 
 //result
-void Navigation2FollowWaypointsDeg::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
+void ExcavatorFollowWaypointsDeg::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
                                              const GoalHandleFollowWaypoints::WrappedResult& result)
 {
   if (!goal_handle->is_active())
@@ -132,15 +132,15 @@ void Navigation2FollowWaypointsDeg::result_callback(const std::shared_ptr<GoalHa
   {
     case rclcpp_action::ResultCode::SUCCEEDED:
       goal_handle->succeed(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if navigation2 execution is succeeded");
+      RCLCPP_INFO(this->get_logger(), "tms if excavator execution is succeeded");
       break;
     case rclcpp_action::ResultCode::ABORTED:
       goal_handle->abort(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if navigation2 execution is aborted");
+      RCLCPP_INFO(this->get_logger(), "tms if excavator execution is aborted");
       break;
     case rclcpp_action::ResultCode::CANCELED:
       goal_handle->canceled(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if navigation2 execution is canceled");
+      RCLCPP_INFO(this->get_logger(), "tms if excavator execution is canceled");
       break;
     default:
       goal_handle->abort(result_to_st_node);
@@ -156,7 +156,7 @@ int main(int argc, char* argv[])
     //   google::InstallFailureSignalHandler();
 
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<Navigation2FollowWaypointsDeg>());
+    rclcpp::spin(std::make_shared<ExcavatorFollowWaypointsDeg>());
     rclcpp::shutdown();
     return 0;
 }

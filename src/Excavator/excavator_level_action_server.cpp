@@ -1,4 +1,4 @@
-#include "tms_if_for_opera/moveit2/moveit2_level_action_server.hpp"
+#include "tms_if_for_opera/Excavator/excavator_level_action_server.hpp"
 
 // #include <moveit_msgs/msg/constraints.hpp>
 // #include <moveit_msgs/msg/orientation_constraint.hpp>
@@ -15,8 +15,8 @@ using std::cout;
 
 using namespace tms_if_for_opera;
 
-Moveit2LevelActionServer::Moveit2LevelActionServer(const rclcpp::NodeOptions& options)
-  : Node("tms_if_for_opera_moveit2_level", options)
+ExcavatorLevelActionServer::ExcavatorLevelActionServer(const rclcpp::NodeOptions& options)
+  : Node("tms_if_for_opera_excavator_level", options)
 {
   this->declare_parameter<std::string>("robot_description", "");
   this->get_parameter("robot_description", robot_description_);
@@ -58,9 +58,9 @@ Moveit2LevelActionServer::Moveit2LevelActionServer(const rclcpp::NodeOptions& op
   using namespace std::placeholders;
 
   action_server_ = rclcpp_action::create_server<ExcavatorChangePose>(
-      this, "tms_rp_level", std::bind(&Moveit2LevelActionServer::handle_goal, this, _1, _2),
-      std::bind(&Moveit2LevelActionServer::handle_cancel, this, _1),
-      std::bind(&Moveit2LevelActionServer::handle_accepted, this, _1));
+      this, "tms_rp_level", std::bind(&ExcavatorLevelActionServer::handle_goal, this, _1, _2),
+      std::bind(&ExcavatorLevelActionServer::handle_cancel, this, _1),
+      std::bind(&ExcavatorLevelActionServer::handle_accepted, this, _1));
   /****/
 
   /* Setup movegroup interface */
@@ -95,7 +95,7 @@ Moveit2LevelActionServer::Moveit2LevelActionServer(const rclcpp::NodeOptions& op
   this->emg_stop_publisher_ = this->create_publisher<std_msgs::msg::Bool>("emg_stop", 10);
 }
 
-rclcpp_action::GoalResponse Moveit2LevelActionServer::handle_goal(const rclcpp_action::GoalUUID& uuid,
+rclcpp_action::GoalResponse ExcavatorLevelActionServer::handle_goal(const rclcpp_action::GoalUUID& uuid,
                                                                      std::shared_ptr<const ExcavatorChangePose::Goal> goal)
 {
   RCLCPP_INFO(this->get_logger(), "Received goal request");
@@ -104,7 +104,7 @@ rclcpp_action::GoalResponse Moveit2LevelActionServer::handle_goal(const rclcpp_a
 }
 
 rclcpp_action::CancelResponse
-Moveit2LevelActionServer::handle_cancel(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
+ExcavatorLevelActionServer::handle_cancel(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
 {
   RCLCPP_INFO(this->get_logger(), "Publishing EMG stop signal to ZX200.");
 
@@ -121,15 +121,15 @@ Moveit2LevelActionServer::handle_cancel(const std::shared_ptr<GoalHandleExcavato
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-void Moveit2LevelActionServer::handle_accepted(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
+void ExcavatorLevelActionServer::handle_accepted(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
 {
   RCLCPP_INFO(this->get_logger(), "handle_accepted() start.");
   using namespace std::placeholders;
   // this needs to return quickly to avoid blocking the executor, so spin up a new thread
-  std::thread{ std::bind(&Moveit2LevelActionServer::execute, this, _1), goal_handle }.detach();
+  std::thread{ std::bind(&ExcavatorLevelActionServer::execute, this, _1), goal_handle }.detach();
 }
 
-void Moveit2LevelActionServer::execute(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
+void ExcavatorLevelActionServer::execute(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
 {
   // Apply collision object
   apply_collision_objects_from_db(collision_object_record_name_);
@@ -380,7 +380,7 @@ finish:
   }
 }
 
-void Moveit2LevelActionServer::apply_collision_objects_from_db(const std::string& record_name)
+void ExcavatorLevelActionServer::apply_collision_objects_from_db(const std::string& record_name)
 {
   // Load collision objects from DB
   // RCLCPP_INFO(this->get_logger(), "Loading collision objects from DB");
@@ -459,7 +459,7 @@ void Moveit2LevelActionServer::apply_collision_objects_from_db(const std::string
   }
 }
 
-void Moveit2LevelActionServer::apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names)
+void ExcavatorLevelActionServer::apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names)
 {
   for (const auto& record_name : record_names)
   {
@@ -528,7 +528,7 @@ void Moveit2LevelActionServer::apply_collision_objects_mesh_from_db(const std::v
   }
 }
 
-double Moveit2LevelActionServer::getDoubleValue(const bsoncxx::document::element& element)
+double ExcavatorLevelActionServer::getDoubleValue(const bsoncxx::document::element& element)
 {
   if (element.type() == bsoncxx::type::k_double)
   {
@@ -547,7 +547,7 @@ double Moveit2LevelActionServer::getDoubleValue(const bsoncxx::document::element
 int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<Moveit2LevelActionServer>());
+  rclcpp::spin(std::make_shared<ExcavatorLevelActionServer>());
   rclcpp::shutdown();
   return 0;
 }

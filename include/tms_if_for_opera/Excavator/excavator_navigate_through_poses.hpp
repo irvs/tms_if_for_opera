@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef NAVIGATION2_NAVIGATE_THROUGH_POSES_HPP
-#define NAVIGATION2_NAVIGATE_THROUGH_POSES_HPP
+#ifndef EXCAVATOR_NAVIGATE_THROUGH_POSES_HPP
+#define EXCAVATOR_NAVIGATE_THROUGH_POSES_HPP
 
 #include <memory>
 #include <map>
@@ -34,13 +34,13 @@
 #include "nav2_msgs/action/navigate_through_poses.hpp"
 
 
-class Navigation2NavigateThroughPoses : public rclcpp::Node
+class ExcavatorNavigateThroughPoses : public rclcpp::Node
 {
 public:
     using NavigateThroughPoses = nav2_msgs::action::NavigateThroughPoses;
     using GoalHandle = rclcpp_action::ServerGoalHandle<NavigateThroughPoses>;
     using GoalHandleNavigateThroughPoses = rclcpp_action::ClientGoalHandle<NavigateThroughPoses>;
-    Navigation2NavigateThroughPoses();
+    ExcavatorNavigateThroughPoses();
 
 
 private:
