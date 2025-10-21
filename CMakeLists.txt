@@ -18,6 +18,12 @@ set(EXCAVATOR_TARGETS
   excavator_excavate_simple_action_server
   excavator_excavate_simple_plan_action_server
   excavator_release_simple_action_server
+  excavator_navigate_through_poses
+  excavator_navigate_through_poses_deg
+  excavator_navigate_anywhere
+  excavator_navigate_anywhere_deg
+  excavator_follow_waypoints
+  excavator_follow_waypoints_deg
   scene_manager
 )
 

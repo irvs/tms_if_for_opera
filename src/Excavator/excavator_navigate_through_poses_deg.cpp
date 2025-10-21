@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <vector>
-#include "tms_if_for_opera/excavator/excavator_navigate_through_poses_deg.hpp"
+#include "tms_if_for_opera/Excavator/excavator_navigate_through_poses_deg.hpp"
 // #include <glog/logging.h>
 
 using std::placeholders::_1;
