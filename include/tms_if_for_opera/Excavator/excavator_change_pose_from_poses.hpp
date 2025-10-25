@@ -1,5 +1,5 @@
-#ifndef EXCAVATOR_EXCAVATE_SIMPLE_ACTION_SERVER_HPP_
-#define EXCAVATOR_EXCAVATE_SIMPLE_ACTION_SERVER_HPP_
+#ifndef EXCAVATOR_CHANGE_POSE_ACTION_SERVER_HPP_
+#define EXCAVATOR_CHANGE_POSE_ACTION_SERVER_HPP_
 
 #include <functional>
 #include <memory>
@@ -11,7 +11,7 @@
 // #include "shape_msgs/msg/solid_primitive.hpp"
 // #include "rclcpp_components/register_node_macro.hpp"
 
-#include "tms_msg_rp/action/tms_rp_excavator_excavate_simple.hpp"
+#include "tms_msg_rp/action/tms_rp_excavator_change_pose.hpp"
 
 /** Moveit! **/
 #include <moveit/move_group_interface/move_group_interface.h>
@@ -37,6 +37,7 @@
 #include <mongocxx/instance.hpp>
 
 #include "tms_if_for_opera/Excavator/lib/excavator_ik.hpp"
+#include "tms_if_for_opera/Excavator/lib/excavator_pose_converter.hpp"
 
 #include <fstream>
 
@@ -46,13 +47,13 @@
 
 namespace tms_if_for_opera
 {
-class ExcavatorExcavateSimpleActionServer : public rclcpp::Node
+class ExcavatorChangePoseFromPoseActionServer : public rclcpp::Node
 {
 public:
-  using ExcavatorExcavateSimple = tms_msg_rp::action::TmsRpExcavatorExcavateSimple;
-  using GoalHandleExcavatorExcavateSimple = rclcpp_action::ServerGoalHandle<ExcavatorExcavateSimple>;
+  using ExcavatorChangePoseFromPose = tms_msg_rp::action::TmsRpExcavatorChangePose;
+  using GoalHandleExcavatorChangePoseFromPose = rclcpp_action::ServerGoalHandle<ExcavatorChangePoseFromPose>;
 
-  explicit ExcavatorExcavateSimpleActionServer(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
+  explicit ExcavatorChangePoseFromPoseActionServer(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
 
 private:
   std::string planning_group_;
@@ -60,18 +61,17 @@ private:
   std::string collision_object_record_name_;
   std::vector<std::string> collision_object_dump_record_name_;
 
-  rclcpp_action::Server<ExcavatorExcavateSimple>::SharedPtr action_server_;
+  rclcpp_action::Server<ExcavatorChangePoseFromPose>::SharedPtr action_server_;
   rclcpp::Node::SharedPtr move_group_node_;
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface::Options> move_group_options_;
   rclcpp::executors::SingleThreadedExecutor executor_;
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
-  // std::vector<double> current_joint_values_;
   std::vector<std::string> joint_names_;
   std::vector<std::string> link_names_;
   std::map<std::string, double> current_joint_values_;
-  // std::map<std::string, double> target_joint_values_;
   ExcavatorIK excavator_ik_;
+  ExcavatorPoseConverter pose_converter_;
   moveit::core::RobotStatePtr robot_state_;
 
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr emg_stop_publisher_;  // for emg stop
@@ -85,20 +85,15 @@ private:
   std::map<std::string, rclcpp::Subscription<std_msgs::msg::String>::SharedPtr> robot_description_subs_;
 
   rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID& uuid,
-                                          std::shared_ptr<const ExcavatorExcavateSimple::Goal> goal);
-  rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandleExcavatorExcavateSimple> goal_handle);
-  void handle_accepted(const std::shared_ptr<GoalHandleExcavatorExcavateSimple> goal_handle);
-  void execute(const std::shared_ptr<GoalHandleExcavatorExcavateSimple> goal_handle);
+                                          std::shared_ptr<const ExcavatorChangePoseFromPose::Goal> goal);
+  rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandleExcavatorChangePoseFromPose> goal_handle);
+  void handle_accepted(const std::shared_ptr<GoalHandleExcavatorChangePoseFromPose> goal_handle);
+  void execute(const std::shared_ptr<GoalHandleExcavatorChangePoseFromPose> goal_handle);
 
-  void apply_collision_objects_from_db(const std::string& record_name);
-  void apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names);
   double getDoubleValue(const bsoncxx::document::element& element);
 
   bool load_urdf_from_file(const std::string& robot_name);
-  void apply_collision_objects_from_robot_description_and_tf(
-    const std::string& other_robot_base_frame, 
-    const std::string& collision_object_prefix);
 };
 }  // namespace tms_if_for_opera
 
-#endif  // EXCAVATOR_EXCAVATE_SIMPLE_ACTION_SERVER_HPP_
+#endif  // EXCAVATOR_CHANGE_POSE_ACTION_SERVER_HPP_

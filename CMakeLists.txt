@@ -11,13 +11,8 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 set(EXCAVATOR_TARGETS
-  excavator_change_pose_action_server
-  excavator_change_pose_plan_action_server
-  excavator_level_action_server
-  excavator_gather_action_server
-  excavator_excavate_simple_action_server
-  excavator_excavate_simple_plan_action_server
-  excavator_release_simple_action_server
+  excavator_change_pose_from_pose
+  excavator_change_pose_from_poses
   excavator_navigate_through_poses
   excavator_navigate_through_poses_deg
   excavator_navigate_anywhere

@@ -47,9 +47,9 @@ def generate_launch_description():
     robot_description_content = Command(['xacro ', LaunchConfiguration('robot_description')])
 
     # Create the zx200_change_pose_action_server node
-    excavator_change_pose_action_server_node_zx200 = Node(
+    excavator_change_pose_from_pose_node_zx200 = Node(
         package='tms_if_for_opera',
-        executable='excavator_change_pose_action_server',
+        executable='excavator_change_pose_from_pose',
         namespace='zx200',
         parameters=[
             {'robot_description': robot_description_content},
@@ -58,9 +58,9 @@ def generate_launch_description():
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
-    excavator_change_pose_plan_action_server_node_zx200 = Node(
+    excavator_change_pose_from_poses_node_zx200 = Node(
         package='tms_if_for_opera',
-        executable='excavator_change_pose_plan_action_server',
+        executable='excavator_change_pose_from_poses',
         namespace='zx200',
         parameters=[
             {'robot_description': robot_description_content},
@@ -68,62 +68,7 @@ def generate_launch_description():
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-    excavator_excavate_simple_action_server_node_zx200 = Node(
-        package='tms_if_for_opera',
-        executable='excavator_excavate_simple_action_server',
-        namespace='zx200',
-        parameters=[
-            {'robot_description': robot_description_content},
-            {'planning_group': LaunchConfiguration('planning_group')},
-            {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
-            {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-    excavator_excavate_simple_plan_action_server_node_zx200 = Node(
-        package='tms_if_for_opera',
-        executable='excavator_excavate_simple_plan_action_server',
-        namespace='zx200',
-        parameters=[
-            {'robot_description': robot_description_content},
-            {'planning_group': LaunchConfiguration('planning_group')},
-            {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
-            {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-    excavator_release_simple_action_server_node_zx200 = Node(
-        package='tms_if_for_opera',
-        executable='excavator_release_simple_action_server',
-        namespace='zx200',
-        parameters=[
-            {'robot_description': robot_description_content},
-            {'planning_group': LaunchConfiguration('planning_group')},
-            {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
-            {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-    excavator_level_action_server_node_zx200 = Node(
-        package='tms_if_for_opera',
-        executable='excavator_level_action_server',
-        namespace='zx200',
-        parameters=[
-            {'robot_description': robot_description_content},
-            {'planning_group': LaunchConfiguration('planning_group')},
-            {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
-            {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-    excavator_gather_action_server_node_zx200 = Node(
-        package='tms_if_for_opera',
-        executable='excavator_gather_action_server',
-        namespace='zx200',
-        parameters=[
-            {'robot_description': robot_description_content},
-            {'planning_group': LaunchConfiguration('planning_group')},
-            {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
-            {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
+    ])
     scene_manager_node_zx200 = Node(
         package='tms_if_for_opera',
         executable='scene_manager',
@@ -263,13 +208,8 @@ def generate_launch_description():
         declare_collision_object_dump_record_name_arg,
         declare_other_robots_config_arg,
         
-        excavator_change_pose_action_server_node_zx200,
-        excavator_change_pose_plan_action_server_node_zx200,
-        excavator_excavate_simple_action_server_node_zx200,
-        excavator_excavate_simple_plan_action_server_node_zx200,
-        excavator_release_simple_action_server_node_zx200,
-        excavator_level_action_server_node_zx200,
-        excavator_gather_action_server_node_zx200,
+        excavator_change_pose_from_pose_node_zx200,
+        excavator_change_pose_from_poses_node_zx200,
         scene_manager_node_zx200,
         excavator_navigate_through_poses_node_zx200,
         excavator_navigate_anywhere_node_zx200,
