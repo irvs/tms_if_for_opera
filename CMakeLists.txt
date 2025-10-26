@@ -12,7 +12,6 @@ endif()
 
 set(EXCAVATOR_TARGETS
   excavator_change_pose_from_poses
-  excavator_change_pose_from_joint_values
   excavator_navigate_through_poses
   excavator_navigate_through_poses_deg
   excavator_navigate_anywhere
