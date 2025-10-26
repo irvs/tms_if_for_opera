@@ -260,23 +260,10 @@ void ExcavatorChangePoseFromJointValuesActionServer::execute(const std::shared_p
       goal_handle->abort(result);
       return;
     }
-    combined_traj.append(segment, 0.0);
+    // 時間付きで結合（各セグメントの最終時刻からの差分として追加）
+    double dt = (combined_traj.getWayPointCount() > 0) ? combined_traj.getWayPointDurationFromPrevious(combined_traj.getWayPointCount() - 1) : 0.0;
+    combined_traj.append(segment, dt);
     start_state = segment.getLastWayPoint();
-  }
-
-  // 軌道の時間パラメータ付け（スムージング）
-  trajectory_processing::TimeOptimalTrajectoryGeneration totg;
-  // TODO：getMaxVelocityScalingFactor()とgetMaxAccelerationScalingFactor()を渡すべきだが、Humbleでは1.0で固定
-  bool parametrized = totg.computeTimeStamps(combined_traj, 1.0, 1.0);
-  if (!parametrized)
-  {
-    RCLCPP_ERROR(this->get_logger(), "Time parametrization failed");
-    feedback->state = "ABORTED";
-    goal_handle->publish_feedback(feedback);
-    result->error_code.val = 9999;
-    move_group_->clearPathConstraints();
-    goal_handle->abort(result);
-    return;
   }
 
   feedback->state = "EXECUTING";
