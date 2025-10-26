@@ -11,7 +11,6 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 set(EXCAVATOR_TARGETS
-  excavator_change_pose_from_pose
   excavator_change_pose_from_poses
   excavator_navigate_through_poses
   excavator_navigate_through_poses_deg

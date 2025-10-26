@@ -47,17 +47,6 @@ def generate_launch_description():
     robot_description_content = Command(['xacro ', LaunchConfiguration('robot_description')])
 
     # Create the zx200_change_pose_action_server node
-    excavator_change_pose_from_pose_node_zx200 = Node(
-        package='tms_if_for_opera',
-        executable='excavator_change_pose_from_pose',
-        namespace='zx200',
-        parameters=[
-            {'robot_description': robot_description_content},
-            {'planning_group': LaunchConfiguration('planning_group')},
-            {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
-            {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
     excavator_change_pose_from_poses_node_zx200 = Node(
         package='tms_if_for_opera',
         executable='excavator_change_pose_from_poses',
@@ -208,7 +197,6 @@ def generate_launch_description():
         declare_collision_object_dump_record_name_arg,
         declare_other_robots_config_arg,
         
-        excavator_change_pose_from_pose_node_zx200,
         excavator_change_pose_from_poses_node_zx200,
         scene_manager_node_zx200,
         excavator_navigate_through_poses_node_zx200,
