@@ -11,6 +11,8 @@
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <fstream>
 #include <sstream>
+#include <moveit/robot_trajectory/robot_trajectory.h>
+#include <moveit/trajectory_processing/time_optimal_trajectory_generation.h>
 using std::cout;
 
 using namespace tms_if_for_opera;
@@ -186,7 +188,12 @@ void ExcavatorChangePoseFromJointValuesActionServer::execute(const std::shared_p
   feedback->state = "PLANNING";
   goal_handle->publish_feedback(feedback);
 
-  // 各joint_valuesセットを順番に実行
+  // 関節空間Waypointsを1本の軌道に結合してスムーズに実行
+  auto current_state_ptr = move_group_->getCurrentState();
+  moveit::core::RobotState ref_state = current_state_ptr ? *current_state_ptr : moveit::core::RobotState(move_group_->getRobotModel());
+  moveit::core::RobotState start_state = ref_state;
+  robot_trajectory::RobotTrajectory combined_traj(move_group_->getRobotModel(), planning_group_);
+
   for (size_t i = 0; i < goal->joint_values_sequence.size(); ++i)
   {
     const auto& joint_value = goal->joint_values_sequence[i];
@@ -219,11 +226,11 @@ void ExcavatorChangePoseFromJointValuesActionServer::execute(const std::shared_p
     {
       joint_values_map[joint_value.joint_names[j]] = joint_value.joint_values[j];
     }
-    
-    // MoveGroupにジョイント目標を設定
+
+    // セグメントの開始状態を設定し、目標へプランニング
+    move_group_->setStartState(start_state);
     move_group_->setJointValueTarget(joint_values_map);
     
-    // プランニング
     moveit::planning_interface::MoveGroupInterface::Plan plan;
     bool success = (move_group_->plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
     
@@ -239,14 +246,13 @@ void ExcavatorChangePoseFromJointValuesActionServer::execute(const std::shared_p
     }
     
     RCLCPP_INFO(this->get_logger(), "Planning to joint values set %zu succeeded", i);
-    
-    feedback->state = "EXECUTING";
-    goal_handle->publish_feedback(feedback);
-    
-    // 実行
-    if (move_group_->execute(plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+
+    // 生成されたセグメント軌道をRobotTrajectoryに変換して結合
+    robot_trajectory::RobotTrajectory segment(move_group_->getRobotModel(), planning_group_);
+    segment.setRobotTrajectoryMsg(ref_state, plan.trajectory_);
+    if (segment.getWayPointCount() == 0)
     {
-      RCLCPP_ERROR(this->get_logger(), "Execution of joint values set %zu failed", i);
+      RCLCPP_ERROR(this->get_logger(), "Segment trajectory for set %zu is empty", i);
       feedback->state = "ABORTED";
       goal_handle->publish_feedback(feedback);
       result->error_code.val = 9999;
@@ -254,9 +260,46 @@ void ExcavatorChangePoseFromJointValuesActionServer::execute(const std::shared_p
       goal_handle->abort(result);
       return;
     }
-    
-    RCLCPP_INFO(this->get_logger(), "Reached joint values set %zu", i);
+    combined_traj.append(segment, 0.0);
+    start_state = segment.getLastWayPoint();
   }
+
+  // 軌道の時間パラメータ付け（スムージング）
+  trajectory_processing::TimeOptimalTrajectoryGeneration totg;
+  // TODO：getMaxVelocityScalingFactor()とgetMaxAccelerationScalingFactor()を渡すべきだが、Humbleでは1.0で固定
+  bool parametrized = totg.computeTimeStamps(combined_traj, 1.0, 1.0);
+  if (!parametrized)
+  {
+    RCLCPP_ERROR(this->get_logger(), "Time parametrization failed");
+    feedback->state = "ABORTED";
+    goal_handle->publish_feedback(feedback);
+    result->error_code.val = 9999;
+    move_group_->clearPathConstraints();
+    goal_handle->abort(result);
+    return;
+  }
+
+  feedback->state = "EXECUTING";
+  goal_handle->publish_feedback(feedback);
+
+  moveit_msgs::msg::RobotTrajectory combined_msg;
+  combined_traj.getRobotTrajectoryMsg(combined_msg);
+  moveit::planning_interface::MoveGroupInterface::Plan combined_plan;
+  combined_plan.trajectory_ = combined_msg;
+
+  // 実行
+  if (move_group_->execute(combined_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+  {
+    RCLCPP_ERROR(this->get_logger(), "Execution of combined joint-waypoint trajectory failed");
+    feedback->state = "ABORTED";
+    goal_handle->publish_feedback(feedback);
+    result->error_code.val = 9999;
+    move_group_->clearPathConstraints();
+    goal_handle->abort(result);
+    return;
+  }
+  
+  RCLCPP_INFO(this->get_logger(), "Reached all joint waypoint sets");
 
   // 成功
   feedback->state = "SUCCEEDED";
