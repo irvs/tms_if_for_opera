@@ -58,15 +58,17 @@ def generate_launch_description():
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
     ])
-    scene_manager_node_zx200 = Node(
+    excavator_change_pose_from_joint_values_node_zx200 = Node(
         package='tms_if_for_opera',
-        executable='scene_manager',
+        executable='excavator_change_pose_from_joint_values',
         namespace='zx200',
         parameters=[
+            {'robot_description': robot_description_content},
             {'planning_group': LaunchConfiguration('planning_group')},
-            {'other_robots_config': LaunchConfiguration('other_robots_config')},
+            {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
+            {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
+    ])
     
     excavator_navigate_through_poses_node_zx200 = Node(
         package='tms_if_for_opera',
@@ -198,7 +200,7 @@ def generate_launch_description():
         declare_other_robots_config_arg,
         
         excavator_change_pose_from_poses_node_zx200,
-        scene_manager_node_zx200,
+        excavator_change_pose_from_joint_values_node_zx200,
         excavator_navigate_through_poses_node_zx200,
         excavator_navigate_anywhere_node_zx200,
         excavator_follow_waypoints_node_zx200,
