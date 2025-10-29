@@ -78,6 +78,8 @@ ExcavatorChangePoseFromPoseActionServer::ExcavatorChangePoseFromPoseActionServer
 
   move_group_->setMaxVelocityScalingFactor(1.0);
   move_group_->setMaxAccelerationScalingFactor(1.0);
+  move_group_->setGoalPositionTolerance(0.1);
+  move_group_->setGoalOrientationTolerance(0.1);
   move_group_->setNumPlanningAttempts(100);
   move_group_->setPlanningTime(60.0);
   move_group_->setPlannerId("RRTConnectkConfigDefault");
@@ -87,7 +89,6 @@ ExcavatorChangePoseFromPoseActionServer::ExcavatorChangePoseFromPoseActionServer
 
   // For FK
   robot_state_ = std::make_shared<moveit::core::RobotState>(move_group_->getRobotModel());
-
   // Init DB connection
   mongocxx::instance instance{};
 
@@ -177,6 +178,7 @@ void ExcavatorChangePoseFromPoseActionServer::execute(const std::shared_ptr<Goal
     waypoints.push_back(moveit_pose);
   }
 
+  move_group_->clearPathConstraints();
   // Apply constraints if provided
   if (!goal->constraints.joint_constraints.empty() ||
       !goal->constraints.position_constraints.empty() ||
@@ -193,18 +195,38 @@ void ExcavatorChangePoseFromPoseActionServer::execute(const std::shared_ptr<Goal
   else
   {
     RCLCPP_INFO(this->get_logger(), "No constraints provided, clearing existing constraints");
-    move_group_->clearPathConstraints();
   }
 
-  // Apply planning scene if provided
-  if (!goal->planning_scene.name.empty() || !goal->planning_scene.world.collision_objects.empty())
+  // Planning sceneの初期化: 既存のcollision objectsをクリア
+  RCLCPP_INFO(this->get_logger(), "Initializing planning scene");
+  std::map<std::string, moveit_msgs::msg::CollisionObject> known_objects = planning_scene_interface_.getObjects();
+  RCLCPP_INFO(this->get_logger(), "Current planning scene has %zu collision objects", known_objects.size());
+  if (!known_objects.empty())
   {
-    RCLCPP_INFO(this->get_logger(), "Applying planning scene");
+    std::vector<std::string> object_ids;
+    for (const auto& obj : known_objects)
+    {
+      object_ids.push_back(obj.first);
+    }
+    planning_scene_interface_.removeCollisionObjects(object_ids);
+    RCLCPP_INFO(this->get_logger(), "Cleared %zu collision objects", object_ids.size());
+    rclcpp::sleep_for(std::chrono::milliseconds(500));
+  }
+  // 新しいplanning sceneを適用（goalで指定されている場合）
+  if (!goal->planning_scene.world.collision_objects.empty() ||
+      !goal->planning_scene.world.octomap.octomap.data.empty() ||
+      !goal->planning_scene.link_padding.empty())
+  {
+    RCLCPP_INFO(this->get_logger(), "Applying new planning scene (collision_objects: %zu, octomap: %s, link_padding: %zu)",
+                goal->planning_scene.world.collision_objects.size(),
+                goal->planning_scene.world.octomap.octomap.data.empty() ? "empty" : "provided",
+                goal->planning_scene.link_padding.size());
     planning_scene_interface_.applyPlanningScene(goal->planning_scene);
+    rclcpp::sleep_for(std::chrono::milliseconds(500));
   }
   else
   {
-    RCLCPP_INFO(this->get_logger(), "No planning scene provided");
+    RCLCPP_INFO(this->get_logger(), "No new planning scene provided");
   }
 
   // 最初の点への移動（通常の移動）
@@ -223,7 +245,6 @@ void ExcavatorChangePoseFromPoseActionServer::execute(const std::shared_ptr<Goal
     feedback->state = "ABORTED";
     goal_handle->publish_feedback(feedback);
     result->error_code.val = 9999;
-    move_group_->clearPathConstraints();
     goal_handle->abort(result);
     return;
   }
@@ -237,7 +258,6 @@ void ExcavatorChangePoseFromPoseActionServer::execute(const std::shared_ptr<Goal
     feedback->state = "ABORTED";
     goal_handle->publish_feedback(feedback);
     result->error_code.val = 9999;
-    move_group_->clearPathConstraints();
     goal_handle->abort(result);
     return;
   }
@@ -263,7 +283,6 @@ void ExcavatorChangePoseFromPoseActionServer::execute(const std::shared_ptr<Goal
       feedback->state = "ABORTED";
       goal_handle->publish_feedback(feedback);
       result->error_code.val = 9999;
-      move_group_->clearPathConstraints();
       goal_handle->abort(result);
       return;
     }
@@ -280,7 +299,6 @@ void ExcavatorChangePoseFromPoseActionServer::execute(const std::shared_ptr<Goal
       feedback->state = "ABORTED";
       goal_handle->publish_feedback(feedback);
       result->error_code.val = 9999;
-      move_group_->clearPathConstraints();
       goal_handle->abort(result);
       return;
     }
@@ -292,9 +310,6 @@ void ExcavatorChangePoseFromPoseActionServer::execute(const std::shared_ptr<Goal
   feedback->state = "SUCCEEDED";
   goal_handle->publish_feedback(feedback);
   result->error_code.val = 1;
-  
-  // Clear constraints after success
-  move_group_->clearPathConstraints();
   
   // Succeed the action
   goal_handle->succeed(result);

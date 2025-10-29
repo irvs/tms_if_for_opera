@@ -154,6 +154,7 @@ void ExcavatorChangePoseFromJointValuesActionServer::execute(const std::shared_p
   RCLCPP_INFO(this->get_logger(), "Number of joint value sets: %zu", goal->joint_values_sequence.size());
 
   // Apply constraints if provided
+  move_group_->clearPathConstraints();
   if (!goal->constraints.joint_constraints.empty() ||
       !goal->constraints.position_constraints.empty() ||
       !goal->constraints.orientation_constraints.empty() ||
@@ -169,18 +170,38 @@ void ExcavatorChangePoseFromJointValuesActionServer::execute(const std::shared_p
   else
   {
     RCLCPP_INFO(this->get_logger(), "No constraints provided, clearing existing constraints");
-    move_group_->clearPathConstraints();
   }
 
-  // Apply planning scene if provided
-  if (!goal->planning_scene.name.empty() || !goal->planning_scene.world.collision_objects.empty())
+  // Planning sceneの初期化: 既存のcollision objectsをクリア
+  RCLCPP_INFO(this->get_logger(), "Initializing planning scene");
+  std::map<std::string, moveit_msgs::msg::CollisionObject> known_objects = planning_scene_interface_.getObjects();
+  RCLCPP_INFO(this->get_logger(), "Current planning scene has %zu collision objects", known_objects.size());
+  if (!known_objects.empty())
   {
-    RCLCPP_INFO(this->get_logger(), "Applying planning scene");
+    std::vector<std::string> object_ids;
+    for (const auto& obj : known_objects)
+    {
+      object_ids.push_back(obj.first);
+    }
+    planning_scene_interface_.removeCollisionObjects(object_ids);
+    RCLCPP_INFO(this->get_logger(), "Cleared %zu collision objects", object_ids.size());
+    rclcpp::sleep_for(std::chrono::milliseconds(500));
+  }
+  // 新しいplanning sceneを適用（goalで指定されている場合）
+  if (!goal->planning_scene.world.collision_objects.empty() ||
+      !goal->planning_scene.world.octomap.octomap.data.empty() ||
+      !goal->planning_scene.link_padding.empty())
+  {
+    RCLCPP_INFO(this->get_logger(), "Applying new planning scene (collision_objects: %zu, octomap: %s, link_padding: %zu)",
+                goal->planning_scene.world.collision_objects.size(),
+                goal->planning_scene.world.octomap.octomap.data.empty() ? "empty" : "provided",
+                goal->planning_scene.link_padding.size());
     planning_scene_interface_.applyPlanningScene(goal->planning_scene);
+    rclcpp::sleep_for(std::chrono::milliseconds(500));
   }
   else
   {
-    RCLCPP_INFO(this->get_logger(), "No planning scene provided");
+    RCLCPP_INFO(this->get_logger(), "No new planning scene provided");
   }
 
   feedback->state = "PLANNING";
@@ -200,7 +221,6 @@ void ExcavatorChangePoseFromJointValuesActionServer::execute(const std::shared_p
       feedback->state = "ABORTED";
       goal_handle->publish_feedback(feedback);
       result->error_code.val = 9999;
-      move_group_->clearPathConstraints();
       goal_handle->abort(result);
       return;
     }
@@ -233,7 +253,6 @@ void ExcavatorChangePoseFromJointValuesActionServer::execute(const std::shared_p
       feedback->state = "ABORTED";
       goal_handle->publish_feedback(feedback);
       result->error_code.val = 9999;
-      move_group_->clearPathConstraints();
       goal_handle->abort(result);
       return;
     }
@@ -250,7 +269,6 @@ void ExcavatorChangePoseFromJointValuesActionServer::execute(const std::shared_p
       feedback->state = "ABORTED";
       goal_handle->publish_feedback(feedback);
       result->error_code.val = 9999;
-      move_group_->clearPathConstraints();
       goal_handle->abort(result);
       return;
     }
@@ -262,9 +280,6 @@ void ExcavatorChangePoseFromJointValuesActionServer::execute(const std::shared_p
   feedback->state = "SUCCEEDED";
   goal_handle->publish_feedback(feedback);
   result->error_code.val = 1;
-  
-  // Clear constraints after success
-  move_group_->clearPathConstraints();
   
   // Succeed the action
   goal_handle->succeed(result);
