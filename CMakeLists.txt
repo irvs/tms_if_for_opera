@@ -14,20 +14,14 @@ set(EXCAVATOR_TARGETS
   tms_if_moveit_action_server
   # excavator_assist_excavation_pose_to_joint_angles
   excavator_navigate_through_poses
-  excavator_navigate_through_poses_deg
   excavator_navigate_anywhere
-  excavator_navigate_anywhere_deg
   excavator_follow_waypoints
-  excavator_follow_waypoints_deg
 )
 
 set(CRAWLERDUMP_TARGETS
   crawlerdump_navigate_through_poses
-  crawlerdump_navigate_through_poses_deg
   crawlerdump_navigate_anywhere
-  crawlerdump_navigate_anywhere_deg
   crawlerdump_follow_waypoints
-  crawlerdump_follow_waypoints_deg
   crawlerdump_release_soil
   crawlerdump_swing
   crawlerdump_swing_align_to_heading
@@ -35,11 +29,8 @@ set(CRAWLERDUMP_TARGETS
 
 set(BULLDOZER_TARGETS
   bulldozer_navigate_through_poses
-  bulldozer_navigate_through_poses_deg
   bulldozer_navigate_anywhere
-  bulldozer_navigate_anywhere_deg
   bulldozer_follow_waypoints
-  bulldozer_follow_waypoints_deg
 )
 
 find_package(ament_cmake REQUIRED)
