@@ -187,6 +187,16 @@ void ExcavatorChangePoseFromJointValuesActionServer::execute(const std::shared_p
     RCLCPP_INFO(this->get_logger(), "Cleared %zu collision objects", object_ids.size());
     rclcpp::sleep_for(std::chrono::milliseconds(500));
   }
+  RCLCPP_INFO(this->get_logger(), "Clearing octomap");
+  moveit_msgs::msg::PlanningScene clear_octomap_scene;
+  clear_octomap_scene.is_diff = true;
+  clear_octomap_scene.world.octomap.octomap.header.frame_id = move_group_->getPlanningFrame();
+  clear_octomap_scene.world.octomap.octomap.binary = true;
+  clear_octomap_scene.world.octomap.octomap.id = "OcTree";
+  clear_octomap_scene.world.octomap.octomap.data.clear();
+  planning_scene_interface_.applyPlanningScene(clear_octomap_scene);
+  RCLCPP_INFO(this->get_logger(), "Octomap cleared");
+  rclcpp::sleep_for(std::chrono::milliseconds(500));
   // 新しいplanning sceneを適用（goalで指定されている場合）
   if (!goal->planning_scene.world.collision_objects.empty() ||
       !goal->planning_scene.world.octomap.octomap.data.empty() ||
