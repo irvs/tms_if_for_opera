@@ -18,6 +18,10 @@ def generate_launch_description():
         default_value='false',
         description='Use simulation (Gazebo) clock if true')
     
+    declare_robot_name_arg = DeclareLaunchArgument(
+        'robot_name',
+        default_value='zx200')    
+    
     declare_robot_description_arg = DeclareLaunchArgument(
         'robot_description',
         default_value=str(zx200_description_dir + '/urdf/' + 'zx200.xacro'),
@@ -50,7 +54,7 @@ def generate_launch_description():
     excavator_change_pose_action_server_node_zx200 = Node(
         package='tms_if_for_opera',
         executable='excavator_change_pose_action_server',
-        namespace='zx200',
+        namespace=LaunchConfiguration('robot_name'),
         parameters=[
             {'robot_description': robot_description_content},
             {'planning_group': LaunchConfiguration('planning_group')},
@@ -61,7 +65,7 @@ def generate_launch_description():
     excavator_change_pose_plan_action_server_node_zx200 = Node(
         package='tms_if_for_opera',
         executable='excavator_change_pose_plan_action_server',
-        namespace='zx200',
+        namespace=LaunchConfiguration('robot_name'),
         parameters=[
             {'robot_description': robot_description_content},
             {'planning_group': LaunchConfiguration('planning_group')},
@@ -72,7 +76,7 @@ def generate_launch_description():
     excavator_excavate_simple_action_server_node_zx200 = Node(
         package='tms_if_for_opera',
         executable='excavator_excavate_simple_action_server',
-        namespace='zx200',
+        namespace=LaunchConfiguration('robot_name'),
         parameters=[
             {'robot_description': robot_description_content},
             {'planning_group': LaunchConfiguration('planning_group')},
@@ -83,7 +87,7 @@ def generate_launch_description():
     excavator_excavate_simple_plan_action_server_node_zx200 = Node(
         package='tms_if_for_opera',
         executable='excavator_excavate_simple_plan_action_server',
-        namespace='zx200',
+        namespace=LaunchConfiguration('robot_name'),
         parameters=[
             {'robot_description': robot_description_content},
             {'planning_group': LaunchConfiguration('planning_group')},
@@ -94,7 +98,7 @@ def generate_launch_description():
     excavator_release_simple_action_server_node_zx200 = Node(
         package='tms_if_for_opera',
         executable='excavator_release_simple_action_server',
-        namespace='zx200',
+        namespace=LaunchConfiguration('robot_name'),
         parameters=[
             {'robot_description': robot_description_content},
             {'planning_group': LaunchConfiguration('planning_group')},
@@ -105,7 +109,7 @@ def generate_launch_description():
     excavator_level_action_server_node_zx200 = Node(
         package='tms_if_for_opera',
         executable='excavator_level_action_server',
-        namespace='zx200',
+        namespace=LaunchConfiguration('robot_name'),
         parameters=[
             {'robot_description': robot_description_content},
             {'planning_group': LaunchConfiguration('planning_group')},
@@ -116,7 +120,7 @@ def generate_launch_description():
     excavator_gather_action_server_node_zx200 = Node(
         package='tms_if_for_opera',
         executable='excavator_gather_action_server',
-        namespace='zx200',
+        namespace=LaunchConfiguration('robot_name'),
         parameters=[
             {'robot_description': robot_description_content},
             {'planning_group': LaunchConfiguration('planning_group')},
@@ -127,7 +131,7 @@ def generate_launch_description():
     scene_manager_node_zx200 = Node(
         package='tms_if_for_opera',
         executable='scene_manager',
-        namespace='zx200',
+        namespace=LaunchConfiguration('robot_name'),
         parameters=[
             {'planning_group': LaunchConfiguration('planning_group')},
             {'other_robots_config': LaunchConfiguration('other_robots_config')},
@@ -137,7 +141,7 @@ def generate_launch_description():
     excavator_navigate_through_poses_node_zx200 = Node(
         package='tms_if_for_opera',
         executable='excavator_navigate_through_poses',
-        namespace='zx200',
+        namespace=LaunchConfiguration('robot_name'),
         parameters=[
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
@@ -145,7 +149,7 @@ def generate_launch_description():
     excavator_navigate_anywhere_node_zx200 = Node(
         package='tms_if_for_opera',
         executable='excavator_navigate_anywhere',
-        namespace='zx200',
+        namespace=LaunchConfiguration('robot_name'),
         parameters=[
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])  
@@ -153,103 +157,7 @@ def generate_launch_description():
     excavator_follow_waypoints_node_zx200 = Node(
         package='tms_if_for_opera',
         executable='excavator_follow_waypoints',
-        namespace='zx200',
-        parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-    
-    crawlerdump_navigate_through_poses_node_mst110cr_2 = Node(
-        package='tms_if_for_opera',
-        executable='crawlerdump_navigate_through_poses',
-        namespace='mst110cr_2',
-        parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-    
-    crawlerdump_navigate_anywhere_node_mst110cr_2 = Node(
-        package='tms_if_for_opera',
-        executable='crawlerdump_navigate_anywhere',
-        namespace='mst110cr_2',
-        parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-    
-    crawlerdump_follow_waypoints_node_mst110cr_2 = Node(
-        package='tms_if_for_opera',
-        executable='crawlerdump_follow_waypoints',
-        namespace='mst110cr_2',
-        parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-
-    crawlerdump_swing_align_to_heading_node_mst110cr_2 = Node(
-        package='tms_if_for_opera',
-        executable='crawlerdump_swing_align_to_heading',
-        namespace='mst110cr_2',
-        parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-    
-    crawlerdump_release_soil_node_mst110cr_2 = Node(
-        package='tms_if_for_opera',
-        executable='crawlerdump_release_soil',
-        namespace='mst110cr_2',
-        parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-
-    crawlerdump_swing_node_mst110cr_2 = Node(
-        package='tms_if_for_opera',
-        executable='crawlerdump_swing',
-        namespace='mst110cr_2',
-        parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-
-    crawlerdump_navigate_through_poses_node_mst2200vd = Node(
-        package='tms_if_for_opera',
-        executable='crawlerdump_navigate_through_poses',
-        namespace='mst2200vd',
-        parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])  
-    
-    crawlerdump_navigate_anywhere_node_mst2200vd = Node(
-        package='tms_if_for_opera',
-        executable='crawlerdump_navigate_anywhere',
-        namespace='mst2200vd',
-        parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-
-    crawlerdump_follow_waypoints_node_mst2200vd = Node(
-        package='tms_if_for_opera',
-        executable='crawlerdump_follow_waypoints',
-        namespace='mst2200vd',
-        parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-
-    crawlerdump_swing_align_to_heading_node_mst2200vd = Node(
-        package='tms_if_for_opera',
-        executable='crawlerdump_swing_align_to_heading',
-        namespace='mst2200vd',
-        parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-    
-    crawlerdump_release_soil_node_mst2200vd = Node(
-        package='tms_if_for_opera',
-        executable='crawlerdump_release_soil',
-        namespace='mst2200vd',
-        parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ]) 
-    
-    crawlerdump_swing_node_mst2200vd = Node(
-        package='tms_if_for_opera',
-        executable='crawlerdump_swing',
-        namespace='mst2200vd',
+        namespace=LaunchConfiguration('robot_name'),
         parameters=[
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
@@ -257,6 +165,7 @@ def generate_launch_description():
     # Build the launch description
     ld = LaunchDescription([
         declare_use_sim_time_arg,
+        declare_robot_name_arg,
         declare_robot_description_arg,
         declare_planning_group_arg,
         declare_collision_object_record_name_arg,
@@ -274,20 +183,6 @@ def generate_launch_description():
         excavator_navigate_through_poses_node_zx200,
         excavator_navigate_anywhere_node_zx200,
         excavator_follow_waypoints_node_zx200,
-
-        crawlerdump_navigate_through_poses_node_mst110cr_2,
-        crawlerdump_navigate_anywhere_node_mst110cr_2,
-        crawlerdump_follow_waypoints_node_mst110cr_2,
-        crawlerdump_swing_align_to_heading_node_mst110cr_2,
-        crawlerdump_release_soil_node_mst110cr_2,
-        crawlerdump_swing_node_mst110cr_2,
-
-        crawlerdump_navigate_through_poses_node_mst2200vd,
-        crawlerdump_navigate_anywhere_node_mst2200vd,
-        crawlerdump_follow_waypoints_node_mst2200vd,
-        crawlerdump_swing_align_to_heading_node_mst2200vd,
-        crawlerdump_release_soil_node_mst2200vd,
-        crawlerdump_swing_node_mst2200vd,
         
     ])
 
