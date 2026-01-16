@@ -20,7 +20,7 @@ def generate_launch_description():
         'robot_name',
         default_value='d37pxi_24')
 
-    bulldozer_navigate_anywhere_node = Node(
+    bulldozer_blade_control_node = Node(
         package='tms_if_for_opera',
         executable='bulldozer_blade_control',
         namespace=LaunchConfiguration('robot_name'),
@@ -58,6 +58,7 @@ def generate_launch_description():
         declare_use_sim_time_arg,
         declare_robot_name_arg,
 
+        bulldozer_blade_control_node,
         bulldozer_navigate_through_poses_node,
         bulldozer_navigate_anywhere_node,
         bulldozer_follow_waypoints_node

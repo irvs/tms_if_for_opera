@@ -18,7 +18,7 @@ def generate_launch_description():
 
     declare_robot_name_arg = DeclareLaunchArgument(
         'robot_name',
-        default_value='mst110cr_2')
+        default_value='mst110cr')
 
 
     crawlerdump_navigate_through_poses_node = Node(
