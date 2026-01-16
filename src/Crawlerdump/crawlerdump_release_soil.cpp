@@ -1,156 +1,158 @@
-// Copyright 2023, IRVS Laboratory, Kyushu University, Japan.
+// ============================ crawlerdump_release_soil.cpp ============================
+#include <thread>
+#include <utility>
 
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
-
-//      http://www.apache.org/licenses/LICENSE-2.0
-
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-#include <vector>
 #include "tms_if_for_opera/Crawlerdump/crawlerdump_release_soil.hpp"
-// #include <glog/logging.h>
 
 using std::placeholders::_1;
 using std::placeholders::_2;
 
-CrawlerdumpReleaseSoil::CrawlerdumpReleaseSoil() : rclcpp::Node("tms_if_crawlerdump_release_soil_node")
+CrawlerdumpReleaseSoil::CrawlerdumpReleaseSoil()
+: rclcpp::Node("tms_if_crawlerdump_release_soil_node")
 {
-    this->action_server_ = rclcpp_action::create_server<tms_msg_rp::action::TmsRpCrawlerDumpDumpAngle>(
-        this, "tms_rp_set_dump_angle",
-        std::bind(&CrawlerdumpReleaseSoil::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
-        std::bind(&CrawlerdumpReleaseSoil::handle_cancel, this, std::placeholders::_1),
-        std::bind(&CrawlerdumpReleaseSoil::handle_accepted, this, std::placeholders::_1));
+  // server: 受け口（外からこのノードへ）
+  action_server_ = rclcpp_action::create_server<Action>(
+    this,
+    "tms_rp_set_dump_angle",
+    std::bind(&CrawlerdumpReleaseSoil::handle_goal, this, _1, _2),
+    std::bind(&CrawlerdumpReleaseSoil::handle_cancel, this, _1),
+    std::bind(&CrawlerdumpReleaseSoil::handle_accepted, this, _1));
 
-    
-    action_client_ = rclcpp_action::create_client<SetDumpAngle>(this, "set_dump_angle");
+  // client: 中継先（このノードから別アクションへ）
+  action_client_ = rclcpp_action::create_client<Action>(this, "set_dump_angle");
 }
 
 rclcpp_action::GoalResponse CrawlerdumpReleaseSoil::handle_goal(
-    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const tms_msg_rp::action::TmsRpCrawlerDumpDumpAngle::Goal> goal)
+  const rclcpp_action::GoalUUID & /*uuid*/,
+  std::shared_ptr<const Action::Goal> /*goal*/)
 {
-    RCLCPP_INFO(this->get_logger(), "Received goal request");
-    return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+  RCLCPP_INFO(get_logger(), "Received goal request");
+  return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
-rclcpp_action::CancelResponse CrawlerdumpReleaseSoil::handle_cancel(const std::shared_ptr<GoalHandle> goal_handle)
+rclcpp_action::CancelResponse CrawlerdumpReleaseSoil::handle_cancel(
+  const std::shared_ptr<ServerGoalHandle> /*server_goal_handle*/)
 {
-    RCLCPP_INFO(this->get_logger(), "Received request to cancel tms_if_crawlerdump_release_soil_node node");
+  RCLCPP_INFO(get_logger(), "Received request to cancel (server side)");
+
+  // client 側に投げたゴールが既に作られているならキャンセルを中継
+  try {
     if (client_future_goal_handle_.valid() &&
         client_future_goal_handle_.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
     {
-        auto goal_handle = client_future_goal_handle_.get();
-        action_client_->async_cancel_goal(goal_handle);
+      auto client_goal_handle = client_future_goal_handle_.get();
+      if (client_goal_handle) {
+        action_client_->async_cancel_goal(client_goal_handle);
+      }
     }
-    return rclcpp_action::CancelResponse::ACCEPT;
-}
-
-void CrawlerdumpReleaseSoil::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
-{
-    using namespace std::placeholders;
-    std::thread{ std::bind(&CrawlerdumpReleaseSoil::execute, this, _1), goal_handle }.detach();
-}
-
-void CrawlerdumpReleaseSoil::execute(const std::shared_ptr<GoalHandle> goal_handle)
-{
-    RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_crawlerdump_release_soil) is executing...");
-    current_goal_handle_ = goal_handle;
-    auto result = std::make_shared<tms_msg_rp::action::TmsRpCrawlerDumpDumpAngle::Result>();
-    auto handle_error = [&](const std::string& message) {
-        if (goal_handle->is_active())
-        {
-        goal_handle->abort(result);
-        RCLCPP_INFO(this->get_logger(), message.c_str());
-        }
-        else
-        {
-        RCLCPP_INFO(this->get_logger(), "Goal is not active");
-        }
-    };
-
-    auto goal_msg = SetDumpAngle::Goal();
-    auto received_goal = goal_handle->get_goal();
-    goal_msg.target_angle = received_goal->target_angle;
-
-    //進捗状況を表示するFeedbackコールバックを設�?
-    auto send_goal_options = rclcpp_action::Client<SetDumpAngle>::SendGoalOptions();
-    send_goal_options.goal_response_callback = [this](const auto& goal_handle) { goal_response_callback(goal_handle); };
-    send_goal_options.feedback_callback = [this](const auto tmp, const auto feedback) {
-        feedback_callback(tmp, feedback);
-    };
-    send_goal_options.result_callback = [this, goal_handle](const auto& result) { result_callback(goal_handle, result); };
-
-    //Goal をサーバ�?�に送信
-    RCLCPP_INFO(this->get_logger(), "Sending goal");
-    client_future_goal_handle_ = action_client_->async_send_goal(goal_msg, send_goal_options);
-}
-
-void CrawlerdumpReleaseSoil::goal_response_callback(const GoalHandleCrawlerdumpReleaseSoil::SharedPtr& goal_handle)
-{
-  if (!goal_handle)
-  {
-    RCLCPP_ERROR(this->get_logger(), "Goal was rejected by server");
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(get_logger(), "Exception in cancel relay: %s", e.what());
   }
-  else
-  {
-    RCLCPP_INFO(this->get_logger(), "Goal accepted by server, waiting for result");
-  }
+
+  return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-  
-void CrawlerdumpReleaseSoil::feedback_callback(
-    const GoalHandleCrawlerdumpReleaseSoil::SharedPtr,
-    const std::shared_ptr<const GoalHandleCrawlerdumpReleaseSoil::Feedback> feedback)
+void CrawlerdumpReleaseSoil::handle_accepted(const std::shared_ptr<ServerGoalHandle> goal_handle)
 {
-
+  std::thread{std::bind(&CrawlerdumpReleaseSoil::execute, this, _1), goal_handle}.detach();
 }
 
-
-//result
-void CrawlerdumpReleaseSoil::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
-                                             const GoalHandleCrawlerdumpReleaseSoil::WrappedResult& result)
+void CrawlerdumpReleaseSoil::execute(const std::shared_ptr<ServerGoalHandle> server_goal_handle)
 {
-  if (!goal_handle->is_active())
-  {
-    RCLCPP_WARN(this->get_logger(), "Attempted to succeed an already succeeded goal");
+  RCLCPP_INFO(get_logger(), "tms_if_for_opera(crawlerdump_release_soil) executing...");
+  current_goal_handle_ = server_goal_handle;
+
+  auto result_to_server = std::make_shared<Action::Result>();
+
+  // ---- 中継先の Action server がいないときは abort ----
+  if (!action_client_->wait_for_action_server(std::chrono::seconds(2))) {
+    RCLCPP_ERROR(get_logger(), "Downstream action server 'set_dump_angle' not available");
+    if (server_goal_handle->is_active()) {
+      server_goal_handle->abort(result_to_server);
+    }
     return;
   }
 
-  auto result_to_st_node = std::make_shared<tms_msg_rp::action::TmsRpCrawlerDumpDumpAngle::Result>();
-  switch (result.code)
-  {
+  // ---- server 側で受けた Goal を client 側へ中継 ----
+  Action::Goal goal_msg{};
+  auto received_goal = server_goal_handle->get_goal();
+  goal_msg = *received_goal;  // ★ここが「丸ごとコピー」の正解
+
+  typename Client::SendGoalOptions send_goal_options;
+  send_goal_options.goal_response_callback =
+    [this](const typename ClientGoalHandle::SharedPtr & gh) {
+      goal_response_callback(gh);
+    };
+
+  send_goal_options.feedback_callback =
+    [this](typename ClientGoalHandle::SharedPtr gh,
+           const std::shared_ptr<const Action::Feedback> feedback) {
+      feedback_callback(gh, feedback);
+    };
+
+  send_goal_options.result_callback =
+    [this, server_goal_handle](const WrappedResult & wrapped) {
+      result_callback(server_goal_handle, wrapped);
+    };
+
+  RCLCPP_INFO(get_logger(), "Relaying goal to downstream action server...");
+  client_future_goal_handle_ = action_client_->async_send_goal(goal_msg, send_goal_options);
+}
+
+void CrawlerdumpReleaseSoil::goal_response_callback(const typename ClientGoalHandle::SharedPtr & goal_handle)
+{
+  if (!goal_handle) {
+    RCLCPP_ERROR(get_logger(), "Downstream goal was rejected");
+  } else {
+    RCLCPP_INFO(get_logger(), "Downstream goal accepted, waiting for result");
+  }
+}
+
+void CrawlerdumpReleaseSoil::feedback_callback(
+  typename ClientGoalHandle::SharedPtr /*gh*/,
+  const std::shared_ptr<const Action::Feedback> /*feedback*/)
+{
+  // 必要なら server_goal_handle->publish_feedback(...) をここでやる
+}
+
+void CrawlerdumpReleaseSoil::result_callback(
+  const std::shared_ptr<ServerGoalHandle> server_goal_handle,
+  const WrappedResult & result)
+{
+  if (!server_goal_handle->is_active()) {
+    RCLCPP_WARN(get_logger(), "Server goal is not active anymore");
+    return;
+  }
+
+  auto result_to_server = std::make_shared<Action::Result>();
+
+  switch (result.code) {
     case rclcpp_action::ResultCode::SUCCEEDED:
-      goal_handle->succeed(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if release_soil is succeeded");
+      server_goal_handle->succeed(result_to_server);
+      RCLCPP_INFO(get_logger(), "release_soil succeeded");
       break;
+
     case rclcpp_action::ResultCode::ABORTED:
-      goal_handle->abort(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if release_soil is aborted");
+      server_goal_handle->abort(result_to_server);
+      RCLCPP_INFO(get_logger(), "release_soil aborted");
       break;
+
     case rclcpp_action::ResultCode::CANCELED:
-      goal_handle->canceled(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "tms if release_soil is canceled");
+      server_goal_handle->canceled(result_to_server);
+      RCLCPP_INFO(get_logger(), "release_soil canceled");
       break;
+
     default:
-      goal_handle->abort(result_to_st_node);
-      RCLCPP_INFO(this->get_logger(), "Unknown result code");
+      server_goal_handle->abort(result_to_server);
+      RCLCPP_INFO(get_logger(), "Unknown result code");
       break;
   }
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char * argv[])
 {
-    // Initialize Google's logging library.
-    //   google::InitGoogleLogging(argv[0]);
-    //   google::InstallFailureSignalHandler();
-
-    rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<CrawlerdumpReleaseSoil>());
-    rclcpp::shutdown();
-    return 0;
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<CrawlerdumpReleaseSoil>());
+  rclcpp::shutdown();
+  return 0;
 }

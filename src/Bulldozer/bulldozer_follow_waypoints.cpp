@@ -110,14 +110,12 @@ void BulldozerFollowWaypoints::feedback_callback(
   auto feedback_to_st_node = std::make_shared<FollowWaypoints::Feedback>();
   *feedback_to_st_node = *feedback;
   
-  // アクティブなゴールハンドルにフィードバックを送信
   if (current_goal_handle_ && current_goal_handle_->is_active()) {
     current_goal_handle_->publish_feedback(feedback_to_st_node);
   }
 }
 
 
-//result
 void BulldozerFollowWaypoints::result_callback(const std::shared_ptr<GoalHandle> goal_handle,
                                              const GoalHandleFollowWaypoints::WrappedResult& result)
 {
