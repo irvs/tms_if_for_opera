@@ -34,6 +34,7 @@ set(CRAWLERDUMP_TARGETS
 )
 
 set(BULLDOZER_TARGETS
+  bulldozer_blade_control
   bulldozer_navigate_through_poses
   bulldozer_navigate_anywhere
   bulldozer_follow_waypoints
