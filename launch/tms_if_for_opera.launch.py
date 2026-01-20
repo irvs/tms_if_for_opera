@@ -49,7 +49,7 @@ def generate_launch_description():
     # Create the zx200_change_pose_action_server node
     excavator_change_pose_from_poses_node_zx200 = Node(
         package='tms_if_for_opera',
-        executable='excavator_change_pose_from_poses',
+        executable='excavator_change_pose_plan_from_poses',
         namespace='zx200',
         parameters=[
             {'robot_description': robot_description_content},

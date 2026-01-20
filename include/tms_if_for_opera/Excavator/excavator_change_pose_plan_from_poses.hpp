@@ -1,5 +1,5 @@
-#ifndef EXCAVATOR_CHANGE_POSE_FROM_POSES_HPP_
-#define EXCAVATOR_CHANGE_POSE_FROM_POSES_HPP_
+#ifndef EXCAVATOR_CHANGE_POSE_PLAN_FROM_POSES_HPP_
+#define EXCAVATOR_CHANGE_POSE_PLAN_FROM_POSES_HPP_
 
 #include <functional>
 #include <memory>
@@ -96,4 +96,4 @@ private:
 };
 }  // namespace tms_if_for_opera
 
-#endif  // EXCAVATOR_CHANGE_POSE_FROM_POSES_HPP_
+#endif  // EXCAVATOR_CHANGE_POSE_PLAN_FROM_POSES_HPP_
