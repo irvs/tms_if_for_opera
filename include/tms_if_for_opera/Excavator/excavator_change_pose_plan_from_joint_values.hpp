@@ -1,5 +1,5 @@
-#ifndef EXCAVATOR_CHANGE_POSE_FROM_JOINT_VALUES_HPP_
-#define EXCAVATOR_CHANGE_POSE_FROM_JOINT_VALUES_HPP_
+#ifndef EXCAVATOR_CHANGE_POSE_PLAN_FROM_JOINT_VALUES_HPP_
+#define EXCAVATOR_CHANGE_POSE_PLAN_FROM_JOINT_VALUES_HPP_
 
 #include <functional>
 #include <memory>
@@ -11,7 +11,7 @@
 // #include "shape_msgs/msg/solid_primitive.hpp"
 // #include "rclcpp_components/register_node_macro.hpp"
 
-#include "tms_msg_rp/action/tms_rp_excavator_change_pose.hpp"
+#include "tms_msg_rp/action/tms_rp_excavator_change_pose_plan.hpp"
 
 /** Moveit! **/
 #include <moveit/move_group_interface/move_group_interface.h>
@@ -47,13 +47,13 @@
 
 namespace tms_if_for_opera
 {
-class ExcavatorChangePoseFromJointValuesActionServer : public rclcpp::Node
+class ExcavatorChangePosePlanFromJointValuesActionServer : public rclcpp::Node
 {
 public:
-  using ExcavatorChangePoseFromJointValues = tms_msg_rp::action::TmsRpExcavatorChangePose;
-  using GoalHandleExcavatorChangePoseFromJointValues = rclcpp_action::ServerGoalHandle<ExcavatorChangePoseFromJointValues>;
+  using ExcavatorChangePosePlanFromJointValues = tms_msg_rp::action::TmsRpExcavatorChangePosePlan;
+  using GoalHandleExcavatorChangePosePlanFromJointValues = rclcpp_action::ServerGoalHandle<ExcavatorChangePosePlanFromJointValues>;
 
-  explicit ExcavatorChangePoseFromJointValuesActionServer(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
+  explicit ExcavatorChangePosePlanFromJointValuesActionServer(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
 
 private:
   std::string planning_group_;
@@ -61,7 +61,7 @@ private:
   std::string collision_object_record_name_;
   std::vector<std::string> collision_object_dump_record_name_;
 
-  rclcpp_action::Server<ExcavatorChangePoseFromJointValues>::SharedPtr action_server_;
+  rclcpp_action::Server<ExcavatorChangePosePlanFromJointValues>::SharedPtr action_server_;
   rclcpp::Node::SharedPtr move_group_node_;
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface::Options> move_group_options_;
@@ -85,10 +85,10 @@ private:
   std::map<std::string, rclcpp::Subscription<std_msgs::msg::String>::SharedPtr> robot_description_subs_;
 
   rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID& uuid,
-                                          std::shared_ptr<const ExcavatorChangePoseFromJointValues::Goal> goal);
-  rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandleExcavatorChangePoseFromJointValues> goal_handle);
-  void handle_accepted(const std::shared_ptr<GoalHandleExcavatorChangePoseFromJointValues> goal_handle);
-  void execute(const std::shared_ptr<GoalHandleExcavatorChangePoseFromJointValues> goal_handle);
+                                          std::shared_ptr<const ExcavatorChangePosePlanFromJointValues::Goal> goal);
+  rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandleExcavatorChangePosePlanFromJointValues> goal_handle);
+  void handle_accepted(const std::shared_ptr<GoalHandleExcavatorChangePosePlanFromJointValues> goal_handle);
+  void execute(const std::shared_ptr<GoalHandleExcavatorChangePosePlanFromJointValues> goal_handle);
 
   double getDoubleValue(const bsoncxx::document::element& element);
 
@@ -96,4 +96,4 @@ private:
 };
 }  // namespace tms_if_for_opera
 
-#endif  // EXCAVATOR_CHANGE_POSE_FROM_JOINT_VALUES_HPP_
+#endif  // EXCAVATOR_CHANGE_POSE_PLAN_FROM_JOINT_VALUES_HPP_
