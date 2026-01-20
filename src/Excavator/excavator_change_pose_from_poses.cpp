@@ -58,7 +58,7 @@ ExcavatorChangePoseFromPoseActionServer::ExcavatorChangePoseFromPoseActionServer
   using namespace std::placeholders;
 
   action_server_ = rclcpp_action::create_server<ExcavatorChangePoseFromPose>(
-      this, "tms_rp_excavator_change_pose_from_poses", std::bind(&ExcavatorChangePoseFromPoseActionServer::handle_goal, this, _1, _2),
+      this, "tms_rp_excavator_change_pose_plan_from_poses", std::bind(&ExcavatorChangePoseFromPoseActionServer::handle_goal, this, _1, _2),
       std::bind(&ExcavatorChangePoseFromPoseActionServer::handle_cancel, this, _1),
       std::bind(&ExcavatorChangePoseFromPoseActionServer::handle_accepted, this, _1));
   /****/
@@ -129,9 +129,8 @@ void ExcavatorChangePoseFromPoseActionServer::handle_accepted(const std::shared_
 
 void ExcavatorChangePoseFromPoseActionServer::execute(const std::shared_ptr<GoalHandleExcavatorChangePoseFromPose> goal_handle)
 {
-
   // Execute goal
-  RCLCPP_INFO(this->get_logger(), "Executing goal");
+  RCLCPP_INFO(this->get_logger(), "Executing goal (Plan generation only)");
 
   const auto goal = goal_handle->get_goal();
   auto feedback = std::make_shared<ExcavatorChangePoseFromPose::Feedback>();
@@ -239,8 +238,8 @@ void ExcavatorChangePoseFromPoseActionServer::execute(const std::shared_ptr<Goal
     RCLCPP_INFO(this->get_logger(), "No new planning scene provided");
   }
 
-  // 最初の点への移動（通常の移動）
-  RCLCPP_INFO(this->get_logger(), "Moving to first waypoint");
+  // 最初の点へのPlan生成（実行はしない）
+  RCLCPP_INFO(this->get_logger(), "Planning to first waypoint");
   move_group_->setPoseTarget(waypoints[0]);
 
   feedback->state = "PLANNING";
@@ -261,20 +260,10 @@ void ExcavatorChangePoseFromPoseActionServer::execute(const std::shared_ptr<Goal
 
   RCLCPP_INFO(this->get_logger(), "Planning to first waypoint succeeded");
 
-  // Execute to first waypoint
-  if (move_group_->execute(first_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
-  {
-    RCLCPP_ERROR(this->get_logger(), "Execution to first waypoint failed");
-    feedback->state = "ABORTED";
-    goal_handle->publish_feedback(feedback);
-    result->error_code.val = 9999;
-    goal_handle->abort(result);
-    return;
-  }
+  // 最初のPlanをresultに追加
+  result->plan.push_back(first_plan.trajectory_);
 
-  RCLCPP_INFO(this->get_logger(), "Reached first waypoint");
-
-  // 2点目以降がある場合、Cartesian Pathで移動
+  // 2点目以降がある場合、Cartesian Pathで計画
   if (waypoints.size() > 1)
   {
     RCLCPP_INFO(this->get_logger(), "Planning Cartesian path for remaining waypoints");
@@ -297,29 +286,17 @@ void ExcavatorChangePoseFromPoseActionServer::execute(const std::shared_ptr<Goal
       return;
     }
 
-    feedback->state = "EXECUTING";
-    goal_handle->publish_feedback(feedback);
-
-    // Cartesian Pathを実行
-    moveit::planning_interface::MoveGroupInterface::Plan cartesian_plan;
-    cartesian_plan.trajectory_ = trajectory;
-    if (move_group_->execute(cartesian_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
-    {
-      RCLCPP_ERROR(this->get_logger(), "Cartesian path execution failed");
-      feedback->state = "ABORTED";
-      goal_handle->publish_feedback(feedback);
-      result->error_code.val = 9999;
-      goal_handle->abort(result);
-      return;
-    }
-
-    RCLCPP_INFO(this->get_logger(), "Cartesian path execution succeeded");
+    // Cartesian PathをresultにPlanとして追加
+    result->plan.push_back(trajectory);
+    RCLCPP_INFO(this->get_logger(), "Cartesian path planning succeeded");
   }
 
-  // 成功
+  // 成功（Planのみ生成、実行はしない）
   feedback->state = "SUCCEEDED";
   goal_handle->publish_feedback(feedback);
   result->error_code.val = 1;
+  
+  RCLCPP_INFO(this->get_logger(), "Plan generation completed. Total plans: %zu", result->plan.size());
   
   // Succeed the action
   goal_handle->succeed(result);

@@ -30,7 +30,7 @@ ExcavatorChangePoseExecuteFromPlanActionServer::ExcavatorChangePoseExecuteFromPl
   using namespace std::placeholders;
 
   action_server_ = rclcpp_action::create_server<ExcavatorChangePoseExecuteFromPlan>(
-      this, "tms_rp_excavator_change_pose_execute_from_joint_values", 
+      this, "tms_rp_excavator_change_pose_execute_from_plan", 
       std::bind(&ExcavatorChangePoseExecuteFromPlanActionServer::handle_goal, this, _1, _2),
       std::bind(&ExcavatorChangePoseExecuteFromPlanActionServer::handle_cancel, this, _1),
       std::bind(&ExcavatorChangePoseExecuteFromPlanActionServer::handle_accepted, this, _1));

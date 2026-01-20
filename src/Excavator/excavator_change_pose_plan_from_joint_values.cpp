@@ -214,6 +214,18 @@ void ExcavatorChangePosePlanFromJointValuesActionServer::execute(const std::shar
 
   // 各joint_valuesセットを順番に実行
   std::vector<moveit_msgs::msg::RobotTrajectory> trajectories;
+  
+  // 最初のPlanは現在のロボット状態から生成するが、2番目以降は前のPlanの最終状態から生成
+  moveit::core::RobotStatePtr start_state = move_group_->getCurrentState(10.0);
+  if (!start_state) {
+    RCLCPP_ERROR(this->get_logger(), "Failed to get current robot state");
+    feedback->state = "ABORTED";
+    goal_handle->publish_feedback(feedback);
+    result->error_code.val = 9999;
+    goal_handle->abort(result);
+    return;
+  }
+  
   for (size_t i = 0; i < goal->joint_values_sequence.size(); ++i)
   {
     const auto& joint_value = goal->joint_values_sequence[i];
@@ -246,6 +258,9 @@ void ExcavatorChangePosePlanFromJointValuesActionServer::execute(const std::shar
       joint_values_map[joint_value.joint_names[j]] = joint_value.joint_values[j];
     }
     
+    // 開始状態を設定（2番目以降は前のPlanの最終状態から）
+    move_group_->setStartState(*start_state);
+    
     // MoveGroupにジョイント目標を設定
     move_group_->setJointValueTarget(joint_values_map);
     
@@ -264,8 +279,35 @@ void ExcavatorChangePosePlanFromJointValuesActionServer::execute(const std::shar
     }
     
     RCLCPP_INFO(this->get_logger(), "Planning to joint values set %zu succeeded", i);
+    
+    // デバッグ: Planの最初と最後のポイントをログ出力
+    if (!plan.trajectory_.joint_trajectory.points.empty()) {
+      const auto& first_point = plan.trajectory_.joint_trajectory.points.front();
+      const auto& last_point = plan.trajectory_.joint_trajectory.points.back();
+      
+      RCLCPP_INFO(this->get_logger(), "  Plan has %zu points", plan.trajectory_.joint_trajectory.points.size());
+      RCLCPP_INFO(this->get_logger(), "  First point positions:");
+      for (size_t j = 0; j < first_point.positions.size() && j < plan.trajectory_.joint_trajectory.joint_names.size(); ++j) {
+        RCLCPP_INFO(this->get_logger(), "    %s: %.6f", 
+                    plan.trajectory_.joint_trajectory.joint_names[j].c_str(), 
+                    first_point.positions[j]);
+      }
+      RCLCPP_INFO(this->get_logger(), "  Last point positions:");
+      for (size_t j = 0; j < last_point.positions.size() && j < plan.trajectory_.joint_trajectory.joint_names.size(); ++j) {
+        RCLCPP_INFO(this->get_logger(), "    %s: %.6f", 
+                    plan.trajectory_.joint_trajectory.joint_names[j].c_str(), 
+                    last_point.positions[j]);
+      }
+      
+      // 次のPlanの開始状態として、このPlanの最終状態を設定
+      for (size_t j = 0; j < plan.trajectory_.joint_trajectory.joint_names.size(); ++j) {
+        const auto& joint_name = plan.trajectory_.joint_trajectory.joint_names[j];
+        start_state->setVariablePosition(joint_name, last_point.positions[j]);
+      }
+      start_state->update();
+    }
+    
     trajectories.push_back(plan.trajectory_);
-
   }
 
   // 成功

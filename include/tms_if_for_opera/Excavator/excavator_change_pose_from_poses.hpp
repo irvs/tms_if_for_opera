@@ -11,7 +11,7 @@
 // #include "shape_msgs/msg/solid_primitive.hpp"
 // #include "rclcpp_components/register_node_macro.hpp"
 
-#include "tms_msg_rp/action/tms_rp_excavator_change_pose.hpp"
+#include "tms_msg_rp/action/tms_rp_excavator_change_pose_plan.hpp"
 
 /** Moveit! **/
 #include <moveit/move_group_interface/move_group_interface.h>
@@ -50,7 +50,7 @@ namespace tms_if_for_opera
 class ExcavatorChangePoseFromPoseActionServer : public rclcpp::Node
 {
 public:
-  using ExcavatorChangePoseFromPose = tms_msg_rp::action::TmsRpExcavatorChangePose;
+  using ExcavatorChangePoseFromPose = tms_msg_rp::action::TmsRpExcavatorChangePosePlan;
   using GoalHandleExcavatorChangePoseFromPose = rclcpp_action::ServerGoalHandle<ExcavatorChangePoseFromPose>;
 
   explicit ExcavatorChangePoseFromPoseActionServer(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
