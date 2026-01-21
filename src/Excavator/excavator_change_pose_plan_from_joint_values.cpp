@@ -148,6 +148,92 @@ void ExcavatorChangePosePlanFromJointValuesActionServer::execute(const std::shar
 
   RCLCPP_INFO(this->get_logger(), "Number of joint value sets: %zu", goal->joint_values_sequence.size());
 
+  // previous_poseが指定されている場合、最後のポイントをstart_stateに設定
+  moveit::core::RobotStatePtr start_state;
+  
+  if (!goal->previous_pose.empty())
+  {
+    RCLCPP_INFO(this->get_logger(), "Setting start state from previous pose (last trajectory)");
+    
+    try {
+      // 最後のRobotTrajectoryを取得
+      const auto& last_trajectory = goal->previous_pose.back();
+      
+      // joint_trajectoryから最後のポイントを取得
+      if (!last_trajectory.joint_trajectory.points.empty())
+      {
+        const auto& last_point = last_trajectory.joint_trajectory.points.back();
+        
+        // 現在のロボット状態を取得
+        start_state = move_group_->getCurrentState(10.0);
+        if (!start_state)
+        {
+          RCLCPP_ERROR(this->get_logger(), "Failed to get current robot state");
+          feedback->state = "ABORTED";
+          goal_handle->publish_feedback(feedback);
+          result->error_code.val = 9999;
+          goal_handle->abort(result);
+          return;
+        }
+        
+        // joint_namesとpositionsが一致しているか確認
+        if (last_trajectory.joint_trajectory.joint_names.size() != last_point.positions.size())
+        {
+          RCLCPP_ERROR(this->get_logger(), "Joint names and positions size mismatch in previous pose");
+          feedback->state = "ABORTED";
+          goal_handle->publish_feedback(feedback);
+          result->error_code.val = 9999;
+          goal_handle->abort(result);
+          return;
+        }
+        
+        // 最後のポイントの関節角度を設定
+        for (size_t i = 0; i < last_trajectory.joint_trajectory.joint_names.size(); ++i)
+        {
+          const std::string& joint_name = last_trajectory.joint_trajectory.joint_names[i];
+          start_state->setVariablePosition(joint_name, last_point.positions[i]);
+        }
+        start_state->update();
+        
+        RCLCPP_INFO(this->get_logger(), "Start state set from previous pose's last point (%zu joints)", 
+                    last_point.positions.size());
+        
+        // デバッグ用：設定した関節角度を表示
+        std::stringstream ss;
+        ss << "Start joint positions: [";
+        for (size_t i = 0; i < last_point.positions.size(); ++i)
+        {
+          ss << last_point.positions[i];
+          if (i < last_point.positions.size() - 1) ss << ", ";
+        }
+        ss << "]";
+        RCLCPP_INFO(this->get_logger(), "%s", ss.str().c_str());
+      }
+      else
+      {
+        RCLCPP_WARN(this->get_logger(), "Previous pose's joint_trajectory has no points, using current state");
+        start_state = move_group_->getCurrentState(10.0);
+      }
+    } catch (const std::exception& e) {
+      RCLCPP_ERROR(this->get_logger(), "Failed to set start state from previous pose: %s. Using current state", e.what());
+      start_state = move_group_->getCurrentState(10.0);
+    }
+  }
+  else
+  {
+    RCLCPP_INFO(this->get_logger(), "No previous pose provided, using current state");
+    start_state = move_group_->getCurrentState(10.0);
+  }
+  
+  if (!start_state) {
+    RCLCPP_ERROR(this->get_logger(), "Failed to get start state");
+    feedback->state = "ABORTED";
+    goal_handle->publish_feedback(feedback);
+    result->error_code.val = 9999;
+    goal_handle->abort(result);
+    return;
+  }
+
   // Apply constraints if provided
   move_group_->clearPathConstraints();
   if (!goal->constraints.joint_constraints.empty() ||
@@ -216,7 +302,6 @@ void ExcavatorChangePosePlanFromJointValuesActionServer::execute(const std::shar
   std::vector<moveit_msgs::msg::RobotTrajectory> trajectories;
   
   // 最初のPlanは現在のロボット状態から生成するが、2番目以降は前のPlanの最終状態から生成
-  moveit::core::RobotStatePtr start_state = move_group_->getCurrentState(10.0);
   if (!start_state) {
     RCLCPP_ERROR(this->get_logger(), "Failed to get current robot state");
     feedback->state = "ABORTED";

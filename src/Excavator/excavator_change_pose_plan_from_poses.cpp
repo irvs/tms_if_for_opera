@@ -152,6 +152,84 @@ void ExcavatorChangePoseFromPoseActionServer::execute(const std::shared_ptr<Goal
 
   RCLCPP_INFO(this->get_logger(), "Number of waypoints: %zu", goal->position_with_angle_sequence.size());
 
+  // previous_poseが指定されている場合、最後のポイントをstart_stateに設定
+  if (!goal->previous_pose.empty())
+  {
+    RCLCPP_INFO(this->get_logger(), "Setting start state from previous pose (last trajectory)");
+    
+    try {
+      // 最後のRobotTrajectoryを取得
+      const auto& last_trajectory = goal->previous_pose.back();
+      
+      // joint_trajectoryから最後のポイントを取得
+      if (!last_trajectory.joint_trajectory.points.empty())
+      {
+        const auto& last_point = last_trajectory.joint_trajectory.points.back();
+        
+        // 現在のロボット状態を取得
+        moveit::core::RobotStatePtr current_state = move_group_->getCurrentState(10.0);
+        if (!current_state)
+        {
+          RCLCPP_ERROR(this->get_logger(), "Failed to get current robot state");
+          feedback->state = "ABORTED";
+          goal_handle->publish_feedback(feedback);
+          result->error_code.val = 9999;
+          goal_handle->abort(result);
+          return;
+        }
+        
+        // joint_namesとpositionsが一致しているか確認
+        if (last_trajectory.joint_trajectory.joint_names.size() != last_point.positions.size())
+        {
+          RCLCPP_ERROR(this->get_logger(), "Joint names and positions size mismatch in previous pose");
+          feedback->state = "ABORTED";
+          goal_handle->publish_feedback(feedback);
+          result->error_code.val = 9999;
+          goal_handle->abort(result);
+          return;
+        }
+        
+        // 最後のポイントの関節角度を設定
+        for (size_t i = 0; i < last_trajectory.joint_trajectory.joint_names.size(); ++i)
+        {
+          const std::string& joint_name = last_trajectory.joint_trajectory.joint_names[i];
+          double position = last_point.positions[i];
+          current_state->setJointPositions(joint_name, &position);
+        }
+        
+        // start_stateとして設定
+        move_group_->setStartState(*current_state);
+        
+        RCLCPP_INFO(this->get_logger(), "Start state set from previous pose's last point (%zu joints)", 
+                    last_point.positions.size());
+        
+        // デバッグ用：設定した関節角度を表示
+        std::stringstream ss;
+        ss << "Start joint positions: [";
+        for (size_t i = 0; i < last_point.positions.size(); ++i)
+        {
+          ss << last_point.positions[i];
+          if (i < last_point.positions.size() - 1) ss << ", ";
+        }
+        ss << "]";
+        RCLCPP_INFO(this->get_logger(), "%s", ss.str().c_str());
+      }
+      else
+      {
+        RCLCPP_WARN(this->get_logger(), "Previous pose's joint_trajectory has no points, using current state");
+        move_group_->setStartStateToCurrentState();
+      }
+    } catch (const std::exception& e) {
+      RCLCPP_ERROR(this->get_logger(), "Failed to set start state from previous pose: %s. Using current state", e.what());
+      move_group_->setStartStateToCurrentState();
+    }
+  }
+  else
+  {
+    RCLCPP_INFO(this->get_logger(), "No previous pose provided, using current state");
+    move_group_->setStartStateToCurrentState();
+  }
+
   // 全ての座標変換を先に実行
   std::vector<geometry_msgs::msg::Pose> waypoints;
   
