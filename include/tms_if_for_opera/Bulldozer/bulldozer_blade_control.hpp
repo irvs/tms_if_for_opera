@@ -1,33 +1,30 @@
-// ============================ crawlerdump_release_soil.hpp ============================
-#ifndef CRAWLERDUMP_RELEASE_SOIL_HPP
-#define CRAWLERDUMP_RELEASE_SOIL_HPP
+#ifndef BULLDOZER_BLADE_CONTROL_HPP
+#define BULLDOZER_BLADE_CONTROL_HPP
 
 #include <chrono>
 #include <future>
 #include <memory>
 #include <string>
-#include <map>
-#include <utility>
 
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 
-#include "tms_msg_rp/action/tms_rp_crawler_dump_dump_angle.hpp"
+#include "tms_msg_rp/action/tms_rp_bulldozer_blade.hpp"
 
-class CrawlerdumpReleaseSoil : public rclcpp::Node
+class BulldozerBladeControl : public rclcpp::Node
 {
 public:
-  using Action = tms_msg_rp::action::TmsRpCrawlerDumpDumpAngle;
+  using Action = tms_msg_rp::action::TmsRpBulldozerBlade;
 
   using ServerGoalHandle = rclcpp_action::ServerGoalHandle<Action>;
   using ClientGoalHandle = rclcpp_action::ClientGoalHandle<Action>;
   using Client = rclcpp_action::Client<Action>;
   using WrappedResult = Client::WrappedResult;
 
-  CrawlerdumpReleaseSoil();
+  BulldozerBladeControl();
 
 private:
-  // -------- server side --------
+  // ---- server side (受け口) ----
   rclcpp_action::Server<Action>::SharedPtr action_server_;
 
   rclcpp_action::GoalResponse handle_goal(
@@ -35,30 +32,20 @@ private:
     std::shared_ptr<const Action::Goal> goal);
 
   rclcpp_action::CancelResponse handle_cancel(
-    const std::shared_ptr<ServerGoalHandle> goal_handle);
+    const std::shared_ptr<ServerGoalHandle> server_goal_handle);
 
   void handle_accepted(const std::shared_ptr<ServerGoalHandle> goal_handle);
-  void execute(const std::shared_ptr<ServerGoalHandle> goal_handle);
+  void execute(const std::shared_ptr<ServerGoalHandle> server_goal_handle);
 
-  std::shared_ptr<ServerGoalHandle> current_goal_handle_;
-
-  // -------- client side --------
+  // ---- client side (中継先) ----
   Client::SharedPtr action_client_;
   std::shared_future<typename ClientGoalHandle::SharedPtr> client_future_goal_handle_;
 
   void goal_response_callback(const typename ClientGoalHandle::SharedPtr & goal_handle);
 
-  void feedback_callback(
-    typename ClientGoalHandle::SharedPtr,
-    const std::shared_ptr<const Action::Feedback> feedback);
-
   void result_callback(
     const std::shared_ptr<ServerGoalHandle> server_goal_handle,
     const WrappedResult & result);
-
-  // (残骸) 使ってないなら消してOK
-  std::map<std::pair<std::string, std::string>, double> param_from_db_;
-  std::map<std::string, double> parameters_;
 };
 
-#endif
+#endif  // BULLDOZER_BLADE_CONTROL_HPP

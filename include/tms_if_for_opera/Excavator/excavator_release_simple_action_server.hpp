@@ -12,6 +12,7 @@
 // #include "rclcpp_components/register_node_macro.hpp"
 
 #include "tms_msg_rp/action/tms_rp_excavator_release_simple.hpp"
+#include "tms_msg_rp/action/tms_rp_excavator_excavate_simple.hpp"
 
 /** Moveit! **/
 #include <moveit/move_group_interface/move_group_interface.h>
@@ -38,7 +39,7 @@
 #include <mongocxx/client.hpp>
 #include <mongocxx/instance.hpp>
 
-// #include "tms_if_for_opera/Excavator/lib/excavator_ik.hpp"
+#include "tms_if_for_opera/Excavator/lib/excavator_ik.hpp"
 
 #include <fstream>
 
@@ -51,7 +52,7 @@ namespace tms_if_for_opera
 class ExcavatorReleaseSimpleActionServer : public rclcpp::Node
 {
 public:
-  using ExcavatorReleaseSimple = tms_msg_rp::action::TmsRpExcavatorReleaseSimple;
+  using ExcavatorReleaseSimple = tms_msg_rp::action::TmsRpExcavatorExcavateSimple;
   using GoalHandleExcavatorReleaseSimple = rclcpp_action::ServerGoalHandle<ExcavatorReleaseSimple>;
 
   explicit ExcavatorReleaseSimpleActionServer(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
@@ -73,7 +74,7 @@ private:
   std::vector<std::string> link_names_;
   std::map<std::string, double> current_joint_values_;
   // std::map<std::string, double> target_joint_values_;
-  // ExcavatorIK excavator_ik_;
+  ExcavatorIK excavator_ik_;
   moveit::core::RobotStatePtr robot_state_;
 
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr emg_stop_publisher_;  // for emg stop
