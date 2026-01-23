@@ -20,7 +20,7 @@ ExcavatorReleaseSimpleActionServer::ExcavatorReleaseSimpleActionServer(const rcl
   this->declare_parameter<std::string>("robot_description", "");
   this->get_parameter("robot_description", robot_description_);
   RCLCPP_INFO(this->get_logger(), "Robot description: %s", robot_description_.c_str());
-  // excavator_ik_.loadURDF(robot_description_);
+  excavator_ik_.loadURDF(robot_description_);
 
   this->declare_parameter<std::string>("planning_group", "");
   this->get_parameter("planning_group", planning_group_);
@@ -161,9 +161,6 @@ void ExcavatorReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandl
   }
   planning_scene_interface_.applyPlanningScene(planning_scene_msg);
 
-  // Clear constraints
-  // move_group_->clearPathConstraints();
-
   // Execute goal
   RCLCPP_INFO(this->get_logger(), "Executing goal");
 
@@ -171,66 +168,115 @@ void ExcavatorReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandl
   auto feedback = std::make_shared<ExcavatorReleaseSimple::Feedback>();
   auto result = std::make_shared<ExcavatorReleaseSimple::Result>();
 
+  // Function for error handling
+  auto handle_error = [&](const std::string& message) {
+    if (goal_handle->is_active())
+    {
+      result->error_code.val = 9999;
+      goal_handle->abort(result);
+      RCLCPP_INFO(this->get_logger(), message.c_str());
+    }
+    else
+    {
+      RCLCPP_INFO(this->get_logger(), "Goal is not active");
+    }
+  };
+
   feedback->state = "IDLE";
   goal_handle->publish_feedback(feedback);
+
+  // Calculate angle and offset for IK
+  double radians = atan2(goal->position_with_angle.position.y, goal->position_with_angle.position.x);
+  double offset = goal->position_with_angle.offset;
+  RCLCPP_INFO(this->get_logger(), "Target angle (radians): %f, offset: %f", radians, offset);
+
+  const double step = 0.01;
+  const double theta_w = goal->position_with_angle.theta_w;
+  const double theta_min = 0.0;
+  const double theta_max = M_PI;
+  std::vector<double> target_joint_values(joint_names_.size(), 0.0);
+
+  bool found = false;
+  double best_theta = theta_w;
+
+  // Find valid IK solution near theta_w
+  for (double delta = 0.0; delta <= theta_max; delta += step) {
+      // 1) Try θw + Δ
+      double cand1 = theta_w + delta;
+      if (cand1 <= theta_max) {
+          if (excavator_ik_.inverseKinematics4Dof(
+                  goal->position_with_angle.position.x + offset*cos(radians),
+                  goal->position_with_angle.position.y + offset*sin(radians),
+                  goal->position_with_angle.position.z - 1.0,
+                  cand1,
+                  target_joint_values) == 0)
+          {
+              best_theta = cand1;
+              found = true;
+              break;
+          }
+      }
+      // 2) Try θw - Δ
+      double cand2 = theta_w - delta;
+      if (delta > 0.0 && cand2 >= theta_min) {
+          if (excavator_ik_.inverseKinematics4Dof(
+                  goal->position_with_angle.position.x + offset*cos(radians),
+                  goal->position_with_angle.position.y + offset*sin(radians),
+                  goal->position_with_angle.position.z - 1.0,
+                  cand2,
+                  target_joint_values) == 0)
+          {
+              best_theta = cand2;
+              found = true;
+              break;
+          }
+      }
+  }
+
+  if (!found) {
+      handle_error("Failed to calculate inverse kinematics near theta_w");
+      return;
+  }
+
+  RCLCPP_INFO(this->get_logger(), "IK solution found with theta: %f", best_theta);
+
+  std::vector<moveit::planning_interface::MoveGroupInterface::Plan> plans;
+  std::vector<std::vector<double>> joint_targets;
 
   // Get current joint values
   std::vector<double> joint_values = move_group_->getCurrentJointValues();
   for (size_t i = 0; i < joint_names_.size() && i < joint_values.size(); i++)
   {
     current_joint_values_[joint_names_[i]] = joint_values[i];
-    // target_joint_values_[joint_names_[i]] = joint_values[i];
   }
 
-  // Constraints
-  std::string target_joint = "swing_joint";
-  auto it = std::find(joint_names_.begin(), joint_names_.end(), target_joint);
-  if (it == joint_names_.end())
-  {
-      RCLCPP_ERROR(rclcpp::get_logger("move_with_constraint"), "Joint %s not found!", target_joint.c_str());
-      return;
-  }
-  size_t joint_index = std::distance(joint_names_.begin(), it);
-  moveit_msgs::msg::Constraints constraints;
-  moveit_msgs::msg::JointConstraint joint_constraint;
-  joint_constraint.joint_name = target_joint;
-  joint_constraint.position = joint_values[joint_index];
-  joint_constraint.tolerance_above = 0.1;
-  joint_constraint.tolerance_below = 0.1;
-  joint_constraint.weight = 1.0;
-  constraints.joint_constraints.push_back(joint_constraint);
-  move_group_->setPathConstraints(constraints);
+  // Move to target position
+  joint_targets.push_back(target_joint_values);
 
-  std::vector<moveit::planning_interface::MoveGroupInterface::Plan> plans;
-  std::vector<std::vector<double>> joint_targets;
-
-  // Set target joint values
-  std::vector<double> target_joint_values(joint_names_.size(), 0.0);
-  for (size_t i = 0; i < joint_names_.size(); i++) {
-    target_joint_values[i] = current_joint_values_[joint_names_[i]];
-  }
-
+  // Release motion 1: adjust bucket and boom
+  std::vector<double> release_joint_values1 = target_joint_values;
   for (size_t i = 0; i < joint_names_.size(); i++) {
     if (joint_names_[i] == "bucket_joint") {
-      target_joint_values[i] = (joint_values[i] - 0.34) / 2.0;  // バケットの目標角度を設定1
+      release_joint_values1[i] = (joint_values[i] - 0.34) / 2.0;
     }
   }
+  joint_targets.push_back(release_joint_values1);
 
-  joint_targets.push_back(target_joint_values);
-
+  // Release motion 2: final release position
+  std::vector<double> release_joint_values2 = release_joint_values1;
   for (size_t i = 0; i < joint_names_.size(); i++) {
     if (joint_names_[i] == "arm_joint") {
-      target_joint_values[i] += 0.1;
+      release_joint_values2[i] += 0.1;
     } else if (joint_names_[i] == "bucket_joint") {
-      target_joint_values[i] = -0.34;
+      release_joint_values2[i] = -0.34;
     } else if (joint_names_[i] == "boom_joint") {
-      target_joint_values[i] -= 0.15;  // boom_joint の目標角度を調整
+      release_joint_values2[i] -= 0.15;
     }
   }
-  joint_targets.push_back(target_joint_values);
+  joint_targets.push_back(release_joint_values2);
 
+  // Plan all trajectories
   moveit::core::RobotState start_state(*move_group_->getCurrentState());
-    
   bool planning_success = true;
   
   for (const auto& joints : joint_targets) {
@@ -244,9 +290,9 @@ void ExcavatorReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandl
       break;
     }
   
-    plans.push_back(plan);  // 成功したら保持
+    plans.push_back(plan);
   
-    // 次の出発点を更新（まだexecuteしてないけど、stateは変える）
+    // Update start state for next planning
     start_state.setJointGroupPositions(
       move_group_->getRobotModel()->getJointModelGroup(move_group_->getName()), joints);
     start_state.update();
@@ -259,34 +305,12 @@ void ExcavatorReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandl
     return;
   }
 
-  // // まず空のRobotTrajectoryを作る
-  // robot_trajectory::RobotTrajectory full_traj(move_group_->getRobotModel(), move_group_->getName());
-
-  // // 各planのtrajectoryをappend
-  // for (const auto& plan : plans) {
-  //   // plan.trajectory_ は moveit_msgs::msg::RobotTrajectory 型
-  //   robot_trajectory::RobotTrajectory part_traj(move_group_->getRobotModel(), move_group_->getName());
-  //   part_traj.setRobotTrajectoryMsg(*move_group_->getCurrentState(), plan.trajectory_);
-
-  //   // append: (traj, 時間オフセット)
-  //   full_traj.append(part_traj, 0.0); // 0.0なら連続して連結
-  // }
-  // trajectory_processing::IterativeParabolicTimeParameterization iptp;
-  // iptp.computeTimeStamps(full_traj);
-
-  // moveit::planning_interface::MoveGroupInterface::Plan full_plan;
-  // full_traj.getRobotTrajectoryMsg(full_plan.trajectory_);
-
-
-
-  // Execute
-  bool all_success = true;
-  // 成功した場合、順番に実行
+  // Execute all trajectories
   for (const auto& plan : plans) {
     moveit::core::MoveItErrorCode exec_result = move_group_->execute(plan);
   
     if (exec_result == moveit::core::MoveItErrorCode::SUCCESS) {
-      continue;  // 正常に完了
+      continue;
     } else {
       RCLCPP_ERROR(this->get_logger(), "Execution failed with error code: %d", exec_result.val);
       result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::ABORTED);
@@ -295,59 +319,11 @@ void ExcavatorReleaseSimpleActionServer::execute(const std::shared_ptr<GoalHandl
     }
   }
 
-  if (all_success) {
-    RCLCPP_INFO(this->get_logger(), "All trajectories executed successfully.");
-    result->error_code.val = static_cast<int>(rclcpp_action::ResultCode::SUCCEEDED);
-    goal_handle->succeed(result);
-    return;
-  }
+  RCLCPP_INFO(this->get_logger(), "All trajectories executed successfully.");
+  result->error_code.val = 1;
+  goal_handle->succeed(result);
 
-  // Set target joint values
-  // std::map<std::string, double> target_joint_values;
-  // target_joint_values = current_joint_values_;
-  // target_joint_values["bucket_joint"] = goal->target_angle;
-  // move_group_->setJointValueTarget(target_joint_values);
-
-  // // Plan
-  // feedback->state = "PLANNING";
-  // goal_handle->publish_feedback(feedback);
-  // moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-  // if (move_group_->plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS)
-  // {
-  //   feedback->state = "ABORTED";
-  //   goal_handle->publish_feedback(feedback);
-  //   result->error_code.val = 9999;
-  // }
-
-  // // Execute
-  // feedback->state = "EXECUTING";
-  // goal_handle->publish_feedback(feedback);
-  // if (move_group_->execute(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS)
-  // {
-  //   feedback->state = "SUCCEEDED";
-  //   goal_handle->publish_feedback(feedback);
-  //   result->error_code.val = 1;
-  // }
-  // else
-  // {
-  //   feedback->state = "ABORTED";
-  //   goal_handle->publish_feedback(feedback);
-  //   result->error_code.val = 9999;
-  // }
-
-  // If execution was successful, set the result of the action and mark it as succeeded.
-  if (result->error_code.val == 1)
-  {
-    RCLCPP_INFO(this->get_logger(), "Goal succeeded");
-    goal_handle->succeed(result);
-  }
-  else
-  {
-    RCLCPP_INFO(this->get_logger(), "Goal aborted");
-    goal_handle->abort(result);
-  }
-
-  // 制約を解除
+  // Clear constraints
   move_group_->clearPathConstraints();
 }
 
