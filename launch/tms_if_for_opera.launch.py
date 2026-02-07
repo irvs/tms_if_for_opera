@@ -7,11 +7,27 @@ from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.actions import ExecuteProcess
 from launch.substitutions import Command, PathJoinSubstitution
+import os
+import yaml
+
+def load_yaml(package_name, file_path):
+    package_path = get_package_share_directory(package_name)
+    absolute_file_path = os.path.join(package_path, file_path)
+    
+    try:
+        with open(absolute_file_path, 'r') as file:
+            return yaml.safe_load(file)
+    except EnvironmentError:
+        return None
 
 def generate_launch_description():
     # Get the package directory
     zx200_description_dir = get_package_share_directory('zx200_description')
+    zx200_moveit_config_dir = get_package_share_directory('zx200_moveit_config')
 
+    # Load kinematics.yaml
+    kinematics_yaml = load_yaml('zx200_moveit_config', 'config/kinematics.yaml')
+    
     # Declare the launch arguments
     declare_use_sim_time_arg = DeclareLaunchArgument(
         'use_sim_time',
@@ -56,7 +72,8 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
+            {'use_sim_time': LaunchConfiguration('use_sim_time')},
+            kinematics_yaml
     ])
     excavator_change_pose_plan_from_joint_values_node_zx200 = Node(
         package='tms_if_for_opera',
@@ -67,7 +84,8 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
+            {'use_sim_time': LaunchConfiguration('use_sim_time')},
+            kinematics_yaml
     ])
     excavator_change_pose_execute_from_plan_node_zx200 = Node(
         package='tms_if_for_opera',
@@ -78,7 +96,8 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
+            {'use_sim_time': LaunchConfiguration('use_sim_time')},
+            kinematics_yaml
     ])
     
     excavator_navigate_through_poses_node_zx200 = Node(
@@ -103,6 +122,19 @@ def generate_launch_description():
         namespace='zx200',
         parameters=[
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
+        ])
+    
+    excavator_assist_pose_to_joint_angles_node_zx200 = Node(
+        package='tms_if_for_opera',
+        executable='excavator_assist_excavation_pose_to_joint_angles',
+        namespace='zx200',
+        parameters=[
+            {'robot_description': robot_description_content},
+            {'planning_group': LaunchConfiguration('planning_group')},
+            {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
+            {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
+            {'use_sim_time': LaunchConfiguration('use_sim_time')},
+            kinematics_yaml
         ])
     
     crawlerdump_navigate_through_poses_node_mst110cr_2 = Node(
@@ -216,6 +248,7 @@ def generate_launch_description():
         excavator_navigate_through_poses_node_zx200,
         excavator_navigate_anywhere_node_zx200,
         excavator_follow_waypoints_node_zx200,
+        excavator_assist_pose_to_joint_angles_node_zx200,
 
         crawlerdump_navigate_through_poses_node_mst110cr_2,
         crawlerdump_navigate_anywhere_node_mst110cr_2,
