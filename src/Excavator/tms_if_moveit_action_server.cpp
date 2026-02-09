@@ -15,6 +15,7 @@
 #include "geometry_msgs/msg/pose.hpp"
 
 #include "moveit_msgs/msg/move_it_error_codes.hpp"
+#include "moveit_msgs/action/move_group_sequence.hpp"
 
 #include "moveit/move_group_interface/move_group_interface.h"
 #include "moveit/planning_scene_interface/planning_scene_interface.h"
@@ -30,6 +31,7 @@ using TmsRpExcavator = tms_msg_rp::action::TmsRpExcavator;
 using GoalHandleTms = rclcpp_action::ServerGoalHandle<TmsRpExcavator>;
 using TmsRpExcavatorParamGet = tms_msg_rp::srv::TmsRpExcavatorParamGet;
 using TmsRpExcavatorParamSet = tms_msg_rp::srv::TmsRpExcavatorParamSet;
+using MoveGroupSequence = moveit_msgs::action::MoveGroupSequence;
 
 class TmsIfMoveItActionServer : public rclcpp::Node
 {
@@ -99,6 +101,12 @@ public:
       std::bind(&TmsIfMoveItActionServer::handle_param_set, this, std::placeholders::_1, std::placeholders::_2)
     );
 
+    // MoveGroupSequenceアクションクライアントの作成
+    move_group_sequence_client_ = rclcpp_action::create_client<MoveGroupSequence>(
+      this, 
+      "sequence_move_group"
+    );
+
     RCLCPP_INFO(get_logger(), "Action server ready.");
     RCLCPP_INFO(get_logger(), "Services ready: tms_rp_excavator_param_get, tms_rp_excavator_param_set");
   }
@@ -124,6 +132,8 @@ private:
   double current_max_velocity_scaling_factor_{1.0};
   double current_max_acceleration_scaling_factor_{1.0};
   int current_num_planning_attempts_{10};
+  std::string current_planner_id_;
+  std::string current_planning_pipeline_id_;
 
   // last plan cache
   std::mutex plan_mtx_;
@@ -133,6 +143,9 @@ private:
   // サービスサーバー
   rclcpp::Service<TmsRpExcavatorParamGet>::SharedPtr param_get_service_;
   rclcpp::Service<TmsRpExcavatorParamSet>::SharedPtr param_set_service_;
+
+  // MoveGroupSequenceアクションクライアント
+  rclcpp_action::Client<MoveGroupSequence>::SharedPtr move_group_sequence_client_;
 
   rclcpp_action::GoalResponse handle_goal(
     const rclcpp_action::GoalUUID&,
@@ -156,7 +169,9 @@ private:
       goal->command == TmsRpExcavator::Goal::CMD_PLAN_AND_EXECUTE_POSE ||
       goal->command == TmsRpExcavator::Goal::CMD_PLAN_AND_EXECUTE_JOINTS ||
       goal->command == TmsRpExcavator::Goal::CMD_EXECUTE_LAST_PLAN ||
-      goal->command == TmsRpExcavator::Goal::CMD_EXECUTE_PLAN;
+      goal->command == TmsRpExcavator::Goal::CMD_EXECUTE_PLAN ||
+      goal->command == TmsRpExcavator::Goal::CMD_PLAN_MOTION_SEQUENCE ||
+      goal->command == TmsRpExcavator::Goal::CMD_PLAN_AND_EXECUTE_MOTION_SEQUENCE;
 
     if (needs_group && goal->planning_group.empty()) {
       RCLCPP_WARN(get_logger(), "Rejected: planning_group is empty for this command.");
@@ -274,6 +289,133 @@ private:
     }
 
     if (cancel_if_needed(move_group_.get())) return;
+
+    // ---- Motion Sequence commands ----
+    if (goal->command == TmsRpExcavator::Goal::CMD_PLAN_MOTION_SEQUENCE ||
+        goal->command == TmsRpExcavator::Goal::CMD_PLAN_AND_EXECUTE_MOTION_SEQUENCE)
+    {
+      publish_fb("preparing_motion_sequence", 0.25f);
+
+      if (goal->motion_sequence_items.empty()) {
+        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, "motion_sequence_items is empty.");
+        return;
+      }
+
+      RCLCPP_INFO(get_logger(), "Processing motion sequence with %zu items", goal->motion_sequence_items.size());
+
+      // MoveGroupSequenceアクションクライアントが利用可能か確認
+      if (!move_group_sequence_client_->wait_for_action_server(std::chrono::seconds(5))) {
+        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, 
+               "MoveGroupSequence action server not available.");
+        return;
+      }
+
+      // MoveGroupSequenceゴールを作成
+      auto sequence_goal = MoveGroupSequence::Goal();
+      sequence_goal.request.items = goal->motion_sequence_items;
+      
+      // Planning optionsを設定
+      sequence_goal.planning_options.planning_scene_diff = goal->planning_scene;
+      
+      // CMD_PLAN_MOTION_SEQUENCEの場合はプランのみ
+      if (goal->command == TmsRpExcavator::Goal::CMD_PLAN_MOTION_SEQUENCE) {
+        sequence_goal.planning_options.plan_only = true;
+        RCLCPP_INFO(get_logger(), "Plan only mode for motion sequence");
+      } else {
+        sequence_goal.planning_options.plan_only = false;
+        RCLCPP_INFO(get_logger(), "Plan and execute mode for motion sequence");
+      }
+
+      if (cancel_if_needed(move_group_.get())) return;
+
+      publish_fb("sending_sequence_goal", 0.35f);
+
+      // ゴールを送信
+      auto send_goal_options = rclcpp_action::Client<MoveGroupSequence>::SendGoalOptions();
+      
+      // フィードバックコールバック
+      send_goal_options.feedback_callback = 
+        [&](rclcpp_action::ClientGoalHandle<MoveGroupSequence>::SharedPtr,
+            const std::shared_ptr<const MoveGroupSequence::Feedback> sequence_feedback)
+        {
+          RCLCPP_INFO(get_logger(), "Sequence feedback: %s", sequence_feedback->state.c_str());
+          publish_fb("sequence_" + sequence_feedback->state, 0.5f);
+        };
+
+      // 結果を受け取るための変数
+      std::promise<MoveGroupSequence::Result::SharedPtr> result_promise;
+      auto result_future = result_promise.get_future();
+
+      // 結果コールバック
+      send_goal_options.result_callback = 
+        [&](const rclcpp_action::ClientGoalHandle<MoveGroupSequence>::WrappedResult& wrapped_result)
+        {
+          result_promise.set_value(wrapped_result.result);
+        };
+
+      auto goal_handle_future = move_group_sequence_client_->async_send_goal(sequence_goal, send_goal_options);
+
+      // ゴールが受け入れられるまで待機
+      if (goal_handle_future.wait_for(std::chrono::seconds(5)) != std::future_status::ready) {
+        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, 
+               "Failed to send motion sequence goal.");
+        return;
+      }
+
+      auto goal_handle = goal_handle_future.get();
+      if (!goal_handle) {
+        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, 
+               "Motion sequence goal was rejected.");
+        return;
+      }
+
+      RCLCPP_INFO(get_logger(), "Motion sequence goal accepted, waiting for result...");
+
+      if (cancel_if_needed(move_group_.get())) return;
+
+      publish_fb("executing_sequence", 0.50f);
+
+      // 結果を待機
+      auto wait_result = result_future.wait_for(std::chrono::seconds(300)); // 5分のタイムアウト
+      
+      if (wait_result != std::future_status::ready) {
+        // タイムアウトまたはキャンセル
+        move_group_sequence_client_->async_cancel_goal(goal_handle);
+        finish(false, moveit_msgs::msg::MoveItErrorCodes::TIMED_OUT, 
+               "Motion sequence execution timed out.");
+        return;
+      }
+
+      auto sequence_result = result_future.get();
+
+      if (cancel_if_needed(move_group_.get())) return;
+
+      // 結果を処理
+      if (sequence_result->response.error_code.val == moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
+        RCLCPP_INFO(get_logger(), "Motion sequence completed successfully");
+        
+        // 計画された軌道をresultに格納
+        if (!sequence_result->response.planned_trajectories.empty()) {
+          result->plan = sequence_result->response.planned_trajectories;
+          RCLCPP_INFO(get_logger(), "Stored %zu planned trajectories", result->plan.size());
+        }
+
+        if (goal->command == TmsRpExcavator::Goal::CMD_PLAN_MOTION_SEQUENCE) {
+          finish(true, moveit_msgs::msg::MoveItErrorCodes::SUCCESS, 
+                 "Motion sequence planned successfully.");
+        } else {
+          finish(true, moveit_msgs::msg::MoveItErrorCodes::SUCCESS, 
+                 "Motion sequence executed successfully.");
+        }
+      } else {
+        std::string error_msg = "Motion sequence failed with error code: " + 
+                               std::to_string(sequence_result->response.error_code.val);
+        RCLCPP_ERROR(get_logger(), "%s", error_msg.c_str());
+        finish(false, sequence_result->response.error_code.val, error_msg);
+      }
+      
+      return;
+    }
 
     if (goal->command == TmsRpExcavator::Goal::CMD_EXECUTE_LAST_PLAN) {
       publish_fb("executing_last_plan", 0.3f);
@@ -508,10 +650,14 @@ private:
         response->max_acceleration_scaling_factor = current_max_acceleration_scaling_factor_;
         response->planning_time = move_group_->getPlanningTime();
         response->num_planning_attempts = current_num_planning_attempts_;
+        response->planner_id = current_planner_id_;
+        response->planning_pipeline_id = current_planning_pipeline_id_;
 
-        RCLCPP_INFO(get_logger(), "Retrieved configuration: vel_scale=%.2f, acc_scale=%.2f",
+        RCLCPP_INFO(get_logger(), "Retrieved configuration: vel_scale=%.2f, acc_scale=%.2f, planner=%s, pipeline=%s",
                     response->max_velocity_scaling_factor,
-                    response->max_acceleration_scaling_factor);
+                    response->max_acceleration_scaling_factor,
+                    response->planner_id.c_str(),
+                    response->planning_pipeline_id.c_str());
       }
 
       response->success = true;
@@ -576,6 +722,20 @@ private:
       move_group_->allowReplanning(request->allow_replanning);
       RCLCPP_INFO(get_logger(), "Set allow replanning: %s", request->allow_replanning ? "true" : "false");
 
+      // planning_pipeline_idが指定されている場合は設定
+      if (!request->planning_pipeline_id.empty()) {
+        move_group_->setPlanningPipelineId(request->planning_pipeline_id);
+        current_planning_pipeline_id_ = request->planning_pipeline_id;
+        RCLCPP_INFO(get_logger(), "Set planning pipeline ID: %s", request->planning_pipeline_id.c_str());
+      }
+
+      // planner_idが指定されている場合は設定
+      if (!request->planner_id.empty()) {
+        move_group_->setPlannerId(request->planner_id);
+        current_planner_id_ = request->planner_id;
+        RCLCPP_INFO(get_logger(), "Set planner ID: %s", request->planner_id.c_str());
+      }
+
       // 現在の設定値をレスポンスに返す
       response->goal_position_tolerance = move_group_->getGoalPositionTolerance();
       response->goal_orientation_tolerance = move_group_->getGoalOrientationTolerance();
@@ -585,6 +745,8 @@ private:
       response->planning_time = move_group_->getPlanningTime();
       response->num_planning_attempts = current_num_planning_attempts_;
       response->allow_replanning = request->allow_replanning;
+      response->planner_id = current_planner_id_;
+      response->planning_pipeline_id = current_planning_pipeline_id_;
 
       response->success = true;
       response->message = "Successfully configured MoveGroup";
