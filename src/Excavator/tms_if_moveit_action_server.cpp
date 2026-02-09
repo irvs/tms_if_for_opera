@@ -5,6 +5,8 @@
 #include <mutex>
 #include <thread>
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
@@ -16,11 +18,18 @@
 
 #include "moveit/move_group_interface/move_group_interface.h"
 #include "moveit/planning_scene_interface/planning_scene_interface.h"
+#include "moveit/robot_model_loader/robot_model_loader.h"
+#include "moveit/robot_model/robot_model.h"
+#include "moveit/robot_state/robot_state.h"
 
 #include "tms_msg_rp/action/tms_rp_excavator.hpp"
+#include "tms_msg_rp/srv/tms_rp_excavator_param_get.hpp"
+#include "tms_msg_rp/srv/tms_rp_excavator_param_set.hpp"
 
 using TmsRpExcavator = tms_msg_rp::action::TmsRpExcavator;
 using GoalHandleTms = rclcpp_action::ServerGoalHandle<TmsRpExcavator>;
+using TmsRpExcavatorParamGet = tms_msg_rp::srv::TmsRpExcavatorParamGet;
+using TmsRpExcavatorParamSet = tms_msg_rp::srv::TmsRpExcavatorParamSet;
 
 class TmsIfMoveItActionServer : public rclcpp::Node
 {
@@ -28,24 +37,102 @@ public:
   explicit TmsIfMoveItActionServer(const rclcpp::NodeOptions& options = rclcpp::NodeOptions())
   : Node("tms_if_moveit_action_server", options)
   {
+    // パラメータの取得
+    this->declare_parameter<std::string>("planning_group", "manipulator");
+    this->get_parameter("planning_group", planning_group_);
+    RCLCPP_INFO(this->get_logger(), "Planning group: %s", planning_group_.c_str());
+
+    // MoveGroupInterface用の専用ノードを作成
+    rclcpp::NodeOptions node_options;
+    node_options.automatically_declare_parameters_from_overrides(true);
+    
+    // 現在のノードのすべてのパラメータを取得して専用ノードに引き継ぐ
+    auto param_names = this->list_parameters({}, 0).names;
+    for (const auto& param_name : param_names)
+    {
+      rclcpp::Parameter param = this->get_parameter(param_name);
+      node_options.append_parameter_override(param_name, param.get_parameter_value());
+    }
+    
+    // 専用ノードを作成（ネームスペースを保持）
+    std::string node_namespace = this->get_namespace();
+    move_group_node_ = rclcpp::Node::make_shared(
+      std::string(this->get_name()) + "_move_group", 
+      node_namespace,
+      node_options
+    );
+    
+    // Robot状態監視のため、専用のExecutorでスピン（detachで常駐）
+    executor_.add_node(move_group_node_);
+    std::thread([this]() { 
+      RCLCPP_INFO(this->get_logger(), "MoveGroup executor thread started");
+      executor_.spin(); 
+    }).detach();
+    
+    RCLCPP_INFO(get_logger(), "MoveGroup node created: %s", move_group_node_->get_name());
+    
+    // MoveGroupInterfaceを一度だけ初期化
+    RCLCPP_INFO(get_logger(), "Creating MoveGroupInterface with planning_group: %s", planning_group_.c_str());
+    move_group_options_ = std::make_shared<moveit::planning_interface::MoveGroupInterface::Options>(
+        planning_group_, "robot_description", node_namespace);
+    move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(
+        move_group_node_, *move_group_options_);
+    
+    RCLCPP_INFO(get_logger(), "MoveGroupInterface created successfully");
+    
     action_server_ = rclcpp_action::create_server<TmsRpExcavator>(
       this,
-      "tms_rp_excavator",  // <-- Action名（トピック名）
+      "tms_rp_excavator",
       std::bind(&TmsIfMoveItActionServer::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
       std::bind(&TmsIfMoveItActionServer::handle_cancel, this, std::placeholders::_1),
       std::bind(&TmsIfMoveItActionServer::handle_accepted, this, std::placeholders::_1)
     );
 
-    RCLCPP_INFO(get_logger(), "Action server started: /tms_rp_excavator");
+    // サービスサーバーの作成
+    param_get_service_ = this->create_service<TmsRpExcavatorParamGet>(
+      "tms_rp_excavator_param_get",
+      std::bind(&TmsIfMoveItActionServer::handle_param_get, this, std::placeholders::_1, std::placeholders::_2)
+    );
+    
+    param_set_service_ = this->create_service<TmsRpExcavatorParamSet>(
+      "tms_rp_excavator_param_set",
+      std::bind(&TmsIfMoveItActionServer::handle_param_set, this, std::placeholders::_1, std::placeholders::_2)
+    );
+
+    RCLCPP_INFO(get_logger(), "Action server ready.");
+    RCLCPP_INFO(get_logger(), "Services ready: tms_rp_excavator_param_get, tms_rp_excavator_param_set");
+  }
+  
+  ~TmsIfMoveItActionServer()
+  {
+    executor_.cancel();
   }
 
 private:
   rclcpp_action::Server<TmsRpExcavator>::SharedPtr action_server_;
+  
+  // MoveGroupInterface用の専用ノードとExecutor
+  rclcpp::Node::SharedPtr move_group_node_;
+  rclcpp::executors::SingleThreadedExecutor executor_;
+  
+  // MoveGroupInterfaceをメンバー変数として保持
+  std::string planning_group_;
+  std::shared_ptr<moveit::planning_interface::MoveGroupInterface::Options> move_group_options_;
+  std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
+
+  // MoveGroupの設定値を保存（Getterがないため）
+  double current_max_velocity_scaling_factor_{1.0};
+  double current_max_acceleration_scaling_factor_{1.0};
+  int current_num_planning_attempts_{10};
 
   // last plan cache
   std::mutex plan_mtx_;
   moveit::planning_interface::MoveGroupInterface::Plan last_plan_;
   bool has_last_plan_{false};
+
+  // サービスサーバー
+  rclcpp::Service<TmsRpExcavatorParamGet>::SharedPtr param_get_service_;
+  rclcpp::Service<TmsRpExcavatorParamSet>::SharedPtr param_set_service_;
 
   rclcpp_action::GoalResponse handle_goal(
     const rclcpp_action::GoalUUID&,
@@ -53,9 +140,14 @@ private:
   {
     RCLCPP_INFO(get_logger(), "=== Received Goal ===");
     RCLCPP_INFO(get_logger(), "  Command: %d", goal->command);
-    RCLCPP_INFO(get_logger(), "  Planning group: %s", goal->planning_group.c_str());
+    RCLCPP_INFO(get_logger(), "  Planning group: %s (ignored, using fixed planning_group from parameter)", goal->planning_group.c_str());
     RCLCPP_INFO(get_logger(), "  Pose sequence size: %zu", goal->pose_sequence.size());
     RCLCPP_INFO(get_logger(), "  Joint values sequence size: %zu", goal->joint_values_sequence.size());
+    
+    // 注意: 現在の実装では、ゴールで指定されたplanning_groupは無視され、
+    // コンストラクタで初期化した固定のplanning_groupが使用されます。
+    // 動的にplanning_groupを切り替えたい場合は、execute()内で
+    // MoveGroupInterfaceを毎回初期化する必要があります。
     
     // コマンドに応じて planning_group が必要かチェック
     const bool needs_group =
@@ -131,11 +223,35 @@ private:
     // ---- commands requiring MoveGroup ----
     publish_fb("initializing_move_group", 0.15f);
     
-    RCLCPP_INFO(get_logger(), "Creating MoveGroupInterface with planning_group: %s", goal->planning_group.c_str());
+    RCLCPP_INFO(get_logger(), "Using MoveGroupInterface with planning_group: %s", planning_group_.c_str());
 
-    moveit::planning_interface::MoveGroupInterface move_group(shared_from_this(), goal->planning_group);
+    // 前回のゴールで設定された制約をクリア
+    move_group_->clearPathConstraints();
+    RCLCPP_INFO(get_logger(), "Cleared previous path constraints");
+
+    // Planning sceneをクリーンな状態に初期化
+    moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
     
-    RCLCPP_INFO(get_logger(), "MoveGroupInterface created successfully");
+    // すべての既存の障害物（collision objects）を削除
+    std::vector<std::string> object_ids = planning_scene_interface.getKnownObjectNames();
+    if (!object_ids.empty()) {
+      RCLCPP_INFO(get_logger(), "Removing %zu existing collision objects", object_ids.size());
+      planning_scene_interface.removeCollisionObjects(object_ids);
+    }
+    
+    // ロボットに取り付けられたオブジェクトも削除
+    std::map<std::string, moveit_msgs::msg::AttachedCollisionObject> attached_objects = 
+        planning_scene_interface.getAttachedObjects();
+    if (!attached_objects.empty()) {
+      RCLCPP_INFO(get_logger(), "Removing %zu attached objects", attached_objects.size());
+      std::vector<std::string> attached_object_ids;
+      for (const auto& obj : attached_objects) {
+        attached_object_ids.push_back(obj.first);
+      }
+      planning_scene_interface.removeCollisionObjects(attached_object_ids);
+    }
+    
+    RCLCPP_INFO(get_logger(), "Planning scene cleared");
 
     // Apply path constraints if provided
     if (!goal->constraints.name.empty() || 
@@ -144,7 +260,7 @@ private:
         !goal->constraints.orientation_constraints.empty() ||
         !goal->constraints.visibility_constraints.empty()) {
       RCLCPP_INFO(get_logger(), "Applying path constraints");
-      move_group.setPathConstraints(goal->constraints);
+      move_group_->setPathConstraints(goal->constraints);
     }
 
     // Apply planning scene diff if provided
@@ -152,13 +268,12 @@ private:
         !goal->planning_scene.world.collision_objects.empty() ||
         goal->planning_scene.is_diff) {
       RCLCPP_INFO(get_logger(), "Applying planning scene");
-      moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
       
       // Apply the entire planning scene diff
       planning_scene_interface.applyPlanningScene(goal->planning_scene);
     }
 
-    if (cancel_if_needed(&move_group)) return;
+    if (cancel_if_needed(move_group_.get())) return;
 
     if (goal->command == TmsRpExcavator::Goal::CMD_EXECUTE_LAST_PLAN) {
       publish_fb("executing_last_plan", 0.3f);
@@ -173,9 +288,9 @@ private:
         plan_copy = last_plan_;
       }
 
-      if (cancel_if_needed(&move_group)) return;
+      if (cancel_if_needed(move_group_.get())) return;
 
-      auto exec_res = move_group.execute(plan_copy);
+      auto exec_res = move_group_->execute(plan_copy);
       if (exec_res == moveit::core::MoveItErrorCode::SUCCESS) {
         finish(true, moveit_msgs::msg::MoveItErrorCodes::SUCCESS, "Executed last plan.");
       } else {
@@ -196,14 +311,14 @@ private:
 
       // 複数のtrajectoryを順次実行
       for (size_t i = 0; i < goal->plan.size(); ++i) {
-        if (cancel_if_needed(&move_group)) return;
+        if (cancel_if_needed(move_group_.get())) return;
 
         moveit::planning_interface::MoveGroupInterface::Plan plan_to_execute;
         plan_to_execute.trajectory_ = goal->plan[i];
 
         publish_fb("executing_trajectory_" + std::to_string(i+1), 0.3f + 0.4f * (float)i / goal->plan.size());
 
-        auto exec_res = move_group.execute(plan_to_execute);
+        auto exec_res = move_group_->execute(plan_to_execute);
 
         if (exec_res != moveit::core::MoveItErrorCode::SUCCESS) {
           finish(false, exec_res.val, "Execute plan failed at trajectory " + std::to_string(i+1));
@@ -232,13 +347,13 @@ private:
       }
 
       // pose_sequenceの最初のポーズをターゲットとして設定
-      move_group.setPoseTarget(goal->pose_sequence[0]);
+      move_group_->setPoseTarget(goal->pose_sequence[0]);
 
-      if (cancel_if_needed(&move_group)) return;
+      if (cancel_if_needed(move_group_.get())) return;
 
       publish_fb("planning", 0.45f);
 
-      auto plan_res = move_group.plan(plan);
+      auto plan_res = move_group_->plan(plan);
       if (plan_res != moveit::core::MoveItErrorCode::SUCCESS) {
         finish(false, plan_res.val, "Planning to pose failed.");
         return;
@@ -266,13 +381,13 @@ private:
       for (size_t i = 0; i < jv.joint_names.size(); ++i) {
         joint_map[jv.joint_names[i]] = jv.joint_values[i];
       }
-      move_group.setJointValueTarget(joint_map);
+      move_group_->setJointValueTarget(joint_map);
 
-      if (cancel_if_needed(&move_group)) return;
+      if (cancel_if_needed(move_group_.get())) return;
 
       publish_fb("planning", 0.45f);
 
-      auto plan_res = move_group.plan(plan);
+      auto plan_res = move_group_->plan(plan);
       if (plan_res != moveit::core::MoveItErrorCode::SUCCESS) {
         finish(false, plan_res.val, "Planning to joints failed.");
         return;
@@ -293,7 +408,7 @@ private:
     // Resultにplanを格納
     result->plan.push_back(plan.trajectory_);
 
-    if (cancel_if_needed(&move_group)) return;
+    if (cancel_if_needed(move_group_.get())) return;
 
     // PLAN only
     if (goal->command == TmsRpExcavator::Goal::CMD_PLAN_TO_POSE ||
@@ -306,13 +421,179 @@ private:
     // PLAN + EXECUTE
     publish_fb("executing", 0.75f);
 
-    if (cancel_if_needed(&move_group)) return;
+    if (cancel_if_needed(move_group_.get())) return;
 
-    auto exec_res = move_group.execute(plan);
+    auto exec_res = move_group_->execute(plan);
     if (exec_res == moveit::core::MoveItErrorCode::SUCCESS) {
       finish(true, moveit_msgs::msg::MoveItErrorCodes::SUCCESS, "Executed.");
     } else {
       finish(false, exec_res.val, "Execute failed.");
+    }
+  }
+
+  // -------- Service Handlers --------
+
+  void handle_param_get(
+    const std::shared_ptr<TmsRpExcavatorParamGet::Request> request,
+    std::shared_ptr<TmsRpExcavatorParamGet::Response> response)
+  {
+    RCLCPP_INFO(get_logger(), "TmsRpExcavatorParamGet service called");
+
+    try {
+      if (request->get_joint_limits) {
+        // ロボットモデルを取得
+        const moveit::core::RobotModelConstPtr& robot_model = move_group_->getRobotModel();
+        const moveit::core::JointModelGroup* joint_model_group = 
+            robot_model->getJointModelGroup(planning_group_);
+
+        if (!joint_model_group) {
+          response->success = false;
+          response->message = "Failed to get joint model group: " + planning_group_;
+          RCLCPP_ERROR(get_logger(), "%s", response->message.c_str());
+          return;
+        }
+
+        // 関節名のリストを取得
+        const std::vector<std::string>& joint_names = joint_model_group->getActiveJointModelNames();
+        response->joint_names = joint_names;
+
+        // 各関節の制限を取得
+        for (const auto& joint_name : joint_names) {
+          const moveit::core::JointModel* joint_model = robot_model->getJointModel(joint_name);
+          if (!joint_model) continue;
+
+          const moveit::core::JointModel::Bounds& bounds = joint_model->getVariableBounds();
+          
+          // 最初の変数の制限を取得（ほとんどの関節は1自由度）
+          if (!bounds.empty()) {
+            response->min_positions.push_back(bounds[0].min_position_);
+            response->max_positions.push_back(bounds[0].max_position_);
+            response->max_velocities.push_back(bounds[0].max_velocity_);
+            response->max_accelerations.push_back(bounds[0].max_acceleration_);
+          }
+        }
+
+        RCLCPP_INFO(get_logger(), "Retrieved joint limits for %zu joints", joint_names.size());
+      }
+      
+      if (request->get_current_state) {
+        // 現在の関節角度を取得
+        std::vector<double> joint_values;
+        move_group_->getCurrentState()->copyJointGroupPositions(
+            move_group_->getCurrentState()->getJointModelGroup(planning_group_), 
+            joint_values);
+        
+        if (response->joint_names.empty()) {
+          response->joint_names = move_group_->getJointNames();
+        }
+        response->joint_positions = joint_values;
+
+        // 現在のエンドエフェクタ位置を取得
+        geometry_msgs::msg::PoseStamped current_pose_stamped = move_group_->getCurrentPose();
+        response->current_pose = current_pose_stamped.pose;
+
+        RCLCPP_INFO(get_logger(), "Retrieved current state: pose=[%.3f, %.3f, %.3f], %zu joints",
+                    response->current_pose.position.x,
+                    response->current_pose.position.y,
+                    response->current_pose.position.z,
+                    response->joint_positions.size());
+      }
+      
+      if (request->get_configuration) {
+        // 現在の設定値を取得（Getterがある値と保存した値）
+        response->goal_position_tolerance = move_group_->getGoalPositionTolerance();
+        response->goal_orientation_tolerance = move_group_->getGoalOrientationTolerance();
+        response->goal_joint_tolerance = move_group_->getGoalJointTolerance();
+        response->max_velocity_scaling_factor = current_max_velocity_scaling_factor_;
+        response->max_acceleration_scaling_factor = current_max_acceleration_scaling_factor_;
+        response->planning_time = move_group_->getPlanningTime();
+        response->num_planning_attempts = current_num_planning_attempts_;
+
+        RCLCPP_INFO(get_logger(), "Retrieved configuration: vel_scale=%.2f, acc_scale=%.2f",
+                    response->max_velocity_scaling_factor,
+                    response->max_acceleration_scaling_factor);
+      }
+
+      response->success = true;
+      response->message = "Successfully retrieved MoveGroup info";
+      RCLCPP_INFO(get_logger(), "%s", response->message.c_str());
+
+    } catch (const std::exception& e) {
+      response->success = false;
+      response->message = std::string("Exception: ") + e.what();
+      RCLCPP_ERROR(get_logger(), "%s", response->message.c_str());
+    }
+  }
+
+  void handle_param_set(
+    const std::shared_ptr<TmsRpExcavatorParamSet::Request> request,
+    std::shared_ptr<TmsRpExcavatorParamSet::Response> response)
+  {
+    RCLCPP_INFO(get_logger(), "TmsRpExcavatorParamSet service called");
+
+    try {
+      // 各パラメータを設定（負の値やNaNは無視）
+      if (request->goal_position_tolerance >= 0.0 && !std::isnan(request->goal_position_tolerance)) {
+        move_group_->setGoalPositionTolerance(request->goal_position_tolerance);
+        RCLCPP_INFO(get_logger(), "Set goal position tolerance: %.4f", request->goal_position_tolerance);
+      }
+
+      if (request->goal_orientation_tolerance >= 0.0 && !std::isnan(request->goal_orientation_tolerance)) {
+        move_group_->setGoalOrientationTolerance(request->goal_orientation_tolerance);
+        RCLCPP_INFO(get_logger(), "Set goal orientation tolerance: %.4f", request->goal_orientation_tolerance);
+      }
+
+      if (request->goal_joint_tolerance >= 0.0 && !std::isnan(request->goal_joint_tolerance)) {
+        move_group_->setGoalJointTolerance(request->goal_joint_tolerance);
+        RCLCPP_INFO(get_logger(), "Set goal joint tolerance: %.4f", request->goal_joint_tolerance);
+      }
+
+      if (request->max_velocity_scaling_factor >= 0.0 && request->max_velocity_scaling_factor <= 1.0 &&
+          !std::isnan(request->max_velocity_scaling_factor)) {
+        move_group_->setMaxVelocityScalingFactor(request->max_velocity_scaling_factor);
+        current_max_velocity_scaling_factor_ = request->max_velocity_scaling_factor;
+        RCLCPP_INFO(get_logger(), "Set max velocity scaling factor: %.4f", request->max_velocity_scaling_factor);
+      }
+
+      if (request->max_acceleration_scaling_factor >= 0.0 && request->max_acceleration_scaling_factor <= 1.0 &&
+          !std::isnan(request->max_acceleration_scaling_factor)) {
+        move_group_->setMaxAccelerationScalingFactor(request->max_acceleration_scaling_factor);
+        current_max_acceleration_scaling_factor_ = request->max_acceleration_scaling_factor;
+        RCLCPP_INFO(get_logger(), "Set max acceleration scaling factor: %.4f", request->max_acceleration_scaling_factor);
+      }
+
+      if (request->planning_time > 0.0 && !std::isnan(request->planning_time)) {
+        move_group_->setPlanningTime(request->planning_time);
+        RCLCPP_INFO(get_logger(), "Set planning time: %.2f sec", request->planning_time);
+      }
+
+      if (request->num_planning_attempts > 0) {
+        move_group_->setNumPlanningAttempts(request->num_planning_attempts);
+        current_num_planning_attempts_ = request->num_planning_attempts;
+        RCLCPP_INFO(get_logger(), "Set num planning attempts: %d", request->num_planning_attempts);
+      }
+
+      move_group_->allowReplanning(request->allow_replanning);
+      RCLCPP_INFO(get_logger(), "Set allow replanning: %s", request->allow_replanning ? "true" : "false");
+
+      // 現在の設定値をレスポンスに返す
+      response->goal_position_tolerance = move_group_->getGoalPositionTolerance();
+      response->goal_orientation_tolerance = move_group_->getGoalOrientationTolerance();
+      response->goal_joint_tolerance = move_group_->getGoalJointTolerance();
+      response->max_velocity_scaling_factor = current_max_velocity_scaling_factor_;
+      response->max_acceleration_scaling_factor = current_max_acceleration_scaling_factor_;
+      response->planning_time = move_group_->getPlanningTime();
+      response->num_planning_attempts = current_num_planning_attempts_;
+      response->allow_replanning = request->allow_replanning;
+
+      response->success = true;
+      response->message = "Successfully configured MoveGroup";
+      RCLCPP_INFO(get_logger(), "%s", response->message.c_str());
+
+    } catch (const std::exception& e) {
+      response->success = false;
+      response->message = std::string("Exception: ") + e.what();
+      RCLCPP_ERROR(get_logger(), "%s", response->message.c_str());
     }
   }
 };
