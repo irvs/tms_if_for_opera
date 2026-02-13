@@ -26,6 +26,7 @@
 #include "tms_msg_rp/action/tms_rp_excavator.hpp"
 #include "tms_msg_rp/srv/tms_rp_excavator_param_get.hpp"
 #include "tms_msg_rp/srv/tms_rp_excavator_param_set.hpp"
+#include <unordered_map>
 
 using TmsRpExcavator = tms_msg_rp::action::TmsRpExcavator;
 using GoalHandleTms = rclcpp_action::ServerGoalHandle<TmsRpExcavator>;
@@ -313,6 +314,16 @@ private:
       // MoveGroupSequenceゴールを作成
       auto sequence_goal = MoveGroupSequence::Goal();
       sequence_goal.request.items = goal->motion_sequence_items;
+
+      if (!sequence_goal.request.items.empty()) {
+        if (const auto* prev = pickPrevTrajectory(goal->previous_pose)) {
+          moveit_msgs::msg::RobotState rs;
+          if (fillRobotStateFromPrevTrajectoryLastPoint(*prev, rs, get_logger())) {
+            sequence_goal.request.items[0].req.start_state = rs;
+            RCLCPP_INFO(get_logger(), "Injected start_state into motion_sequence item[0].");
+          }
+        }
+      }
       
       // Planning optionsを設定
       sequence_goal.planning_options.planning_scene_diff = goal->planning_scene;
@@ -487,6 +498,13 @@ private:
         finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, "pose_sequence is empty.");
         return;
       }
+      if (const auto* prev = pickPrevTrajectory(goal->previous_pose)) {
+        if (!setStartStateFromPrevRobotTrajectory(*prev, *move_group_, planning_group_, get_logger())) {
+          return;
+        }
+      } else {
+        move_group_->setStartStateToCurrentState();
+      } 
 
       // pose_sequenceの最初のポーズをターゲットとして設定
       move_group_->setPoseTarget(goal->pose_sequence[0]);
@@ -511,6 +529,14 @@ private:
         return;
       }
 
+      if (const auto* prev = pickPrevTrajectory(goal->previous_pose)) {
+        if (!setStartStateFromPrevRobotTrajectory(*prev, *move_group_, planning_group_, get_logger())) {
+          return;
+        }
+      } else {
+        move_group_->setStartStateToCurrentState();
+      }
+
       // joint_values_sequenceの最初の値をターゲットとして設定
       const auto& jv = goal->joint_values_sequence[0];
       if (jv.joint_names.size() != jv.joint_values.size() || jv.joint_names.empty()) {
@@ -523,7 +549,32 @@ private:
       for (size_t i = 0; i < jv.joint_names.size(); ++i) {
         joint_map[jv.joint_names[i]] = jv.joint_values[i];
       }
-      move_group_->setJointValueTarget(joint_map);
+      auto current_state = move_group_->getCurrentState();
+      const auto* jmg = current_state->getJointModelGroup(planning_group_);
+      if (!jmg) {
+        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
+                "JointModelGroup not found for planning_group: " + planning_group_);
+        return;
+      }
+    
+      const auto& active_names = jmg->getActiveJointModelNames();
+    
+      std::vector<double> curr_positions;
+      current_state->copyJointGroupPositions(jmg, curr_positions);
+    
+      if (active_names.size() != curr_positions.size()) {
+        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
+                "Active joint names and positions size mismatch.");
+        return;
+      }
+    
+      for (size_t i = 0; i < active_names.size(); ++i) {
+        if (joint_map.find(active_names[i]) == joint_map.end()) {
+          joint_map[active_names[i]] = curr_positions[i];
+        }
+      }
+    move_group_->setJointValueTarget(joint_map);
+      
 
       if (cancel_if_needed(move_group_.get())) return;
 
@@ -758,6 +809,101 @@ private:
       RCLCPP_ERROR(get_logger(), "%s", response->message.c_str());
     }
   }
+
+  static bool setStartStateFromPrevRobotTrajectory(
+    const moveit_msgs::msg::RobotTrajectory& prev_traj,
+    moveit::planning_interface::MoveGroupInterface& mg,
+    const std::string& planning_group,
+    const rclcpp::Logger& logger)
+  {
+    const auto& jt = prev_traj.joint_trajectory;
+  
+    if (jt.joint_names.empty() || jt.points.empty()) {
+      RCLCPP_WARN(logger, "prev RobotTrajectory is empty; fallback to current state.");
+      mg.setStartStateToCurrentState();
+      return false;
+    }
+  
+    const auto& last_pt = jt.points.back();
+    if (last_pt.positions.size() != jt.joint_names.size()) {
+      RCLCPP_ERROR(logger,
+        "prev_traj last point mismatch: positions=%zu joint_names=%zu",
+        last_pt.positions.size(), jt.joint_names.size());
+      return false;
+    }
+  
+    const auto robot_model = mg.getRobotModel();
+    const auto* jmg = robot_model->getJointModelGroup(planning_group);
+    if (!jmg) {
+      RCLCPP_ERROR(logger, "JointModelGroup not found: %s", planning_group.c_str());
+      return false;
+    }
+  
+    // joint_name -> position の辞書を作る
+    std::unordered_map<std::string, double> name_to_pos;
+    name_to_pos.reserve(jt.joint_names.size());
+    for (size_t i = 0; i < jt.joint_names.size(); ++i) {
+      name_to_pos[jt.joint_names[i]] = last_pt.positions[i];
+    }
+  
+    // planning_group の active joints だけ取り出してセット
+    const auto& active = jmg->getActiveJointModelNames();
+    std::vector<double> group_positions;
+    group_positions.reserve(active.size());
+  
+    for (const auto& jn : active) {
+      auto it = name_to_pos.find(jn);
+      if (it == name_to_pos.end()) {
+        RCLCPP_ERROR(logger,
+          "prev_traj does not contain required joint '%s' for group '%s'",
+          jn.c_str(), planning_group.c_str());
+        return false;
+      }
+      group_positions.push_back(it->second);
+    }
+  
+    moveit::core::RobotState start_state(*mg.getCurrentState());
+    start_state.setJointGroupPositions(jmg, group_positions);
+    start_state.update();
+  
+    mg.setStartState(start_state);
+    RCLCPP_INFO(logger, "Start state set from prev RobotTrajectory last point.");
+    return true;
+  }
+
+  static const moveit_msgs::msg::RobotTrajectory* pickPrevTrajectory(
+    const std::vector<moveit_msgs::msg::RobotTrajectory>& prev_vec)
+  {
+    if (prev_vec.empty()) return nullptr;
+    const auto& t = prev_vec.back();  // 「最後のtrajectory」を採用
+    if (t.joint_trajectory.joint_names.empty()) return nullptr;
+    if (t.joint_trajectory.points.empty()) return nullptr;
+    return &t;
+  }  
+
+  static bool fillRobotStateFromPrevTrajectoryLastPoint(
+    const moveit_msgs::msg::RobotTrajectory& prev_traj,
+    moveit_msgs::msg::RobotState& out_state,
+    const rclcpp::Logger& logger)
+  {
+    const auto& jt = prev_traj.joint_trajectory;
+    if (jt.joint_names.empty() || jt.points.empty()) {
+      RCLCPP_WARN(logger, "prev_traj empty; cannot make RobotState.");
+      return false;
+    }
+    const auto& last = jt.points.back();
+    if (last.positions.size() != jt.joint_names.size()) {
+      RCLCPP_ERROR(logger, "size mismatch: names=%zu pos=%zu",
+                   jt.joint_names.size(), last.positions.size());
+      return false;
+    }
+  
+    out_state.joint_state.name = jt.joint_names;
+    out_state.joint_state.position = last.positions;
+    out_state.is_diff = true;
+    return true;
+  }  
+  
 };
 
 int main(int argc, char** argv)
