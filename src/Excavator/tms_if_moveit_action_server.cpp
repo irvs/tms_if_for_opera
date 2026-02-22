@@ -670,26 +670,24 @@ private:
       }
       
       if (request->get_current_state) {
-        // 現在の関節角度を取得
-        std::vector<double> joint_values;
-        move_group_->getCurrentState()->copyJointGroupPositions(
-            move_group_->getCurrentState()->getJointModelGroup(planning_group_), 
-            joint_values);
-        
-        if (response->joint_names.empty()) {
-          response->joint_names = move_group_->getJointNames();
-        }
-        response->joint_positions = joint_values;
+        auto state = move_group_->getCurrentState();
+        sensor_msgs::msg::JointState js;
+        js.header.stamp = this->now();
+        js.name = move_group_->getJointNames();
+        state->copyJointGroupPositions(
+            state->getJointModelGroup(planning_group_),
+            js.position);
+          response->joint_states = js;
 
         // 現在のエンドエフェクタ位置を取得
         geometry_msgs::msg::PoseStamped current_pose_stamped = move_group_->getCurrentPose();
-        response->current_pose = current_pose_stamped.pose;
+        response->current_ee_pose = current_pose_stamped.pose;
 
         RCLCPP_INFO(get_logger(), "Retrieved current state: pose=[%.3f, %.3f, %.3f], %zu joints",
-                    response->current_pose.position.x,
-                    response->current_pose.position.y,
-                    response->current_pose.position.z,
-                    response->joint_positions.size());
+                    response->current_ee_pose.position.x,
+                    response->current_ee_pose.position.y,
+                    response->current_ee_pose.position.z,
+                    response->joint_states.name.size());
       }
       
       if (request->get_configuration) {
