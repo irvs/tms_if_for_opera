@@ -19,6 +19,7 @@
 
 #include "moveit/move_group_interface/move_group_interface.h"
 #include "moveit/planning_scene_interface/planning_scene_interface.h"
+#include <moveit_msgs/srv/apply_planning_scene.hpp>
 #include "moveit/robot_model_loader/robot_model_loader.h"
 #include "moveit/robot_model/robot_model.h"
 #include "moveit/robot_state/robot_state.h"
@@ -108,6 +109,11 @@ public:
       "sequence_move_group"
     );
 
+    apply_planning_scene_server_ = this->create_service<moveit_msgs::srv::ApplyPlanningScene>(
+      "tms_rp_excavator_apply_planning_scene",
+      std::bind(&TmsIfMoveItActionServer::handle_apply_planning_scene, this, std::placeholders::_1, std::placeholders::_2)
+    );
+
     RCLCPP_INFO(get_logger(), "Action server ready.");
     RCLCPP_INFO(get_logger(), "Services ready: tms_rp_excavator_param_get, tms_rp_excavator_param_set");
   }
@@ -147,6 +153,8 @@ private:
 
   // MoveGroupSequenceアクションクライアント
   rclcpp_action::Client<MoveGroupSequence>::SharedPtr move_group_sequence_client_;
+
+  rclcpp::Service<moveit_msgs::srv::ApplyPlanningScene>::SharedPtr apply_planning_scene_server_;
 
   rclcpp_action::GoalResponse handle_goal(
     const rclcpp_action::GoalUUID&,
@@ -245,29 +253,29 @@ private:
     move_group_->clearPathConstraints();
     RCLCPP_INFO(get_logger(), "Cleared previous path constraints");
 
-    // Planning sceneをクリーンな状態に初期化
-    moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
+    // // Planning sceneをクリーンな状態に初期化
+    // moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
     
-    // すべての既存の障害物（collision objects）を削除
-    std::vector<std::string> object_ids = planning_scene_interface.getKnownObjectNames();
-    if (!object_ids.empty()) {
-      RCLCPP_INFO(get_logger(), "Removing %zu existing collision objects", object_ids.size());
-      planning_scene_interface.removeCollisionObjects(object_ids);
-    }
+    // // すべての既存の障害物（collision objects）を削除
+    // std::vector<std::string> object_ids = planning_scene_interface.getKnownObjectNames();
+    // if (!object_ids.empty()) {
+    //   RCLCPP_INFO(get_logger(), "Removing %zu existing collision objects", object_ids.size());
+    //   planning_scene_interface.removeCollisionObjects(object_ids);
+    // }
     
-    // ロボットに取り付けられたオブジェクトも削除
-    std::map<std::string, moveit_msgs::msg::AttachedCollisionObject> attached_objects = 
-        planning_scene_interface.getAttachedObjects();
-    if (!attached_objects.empty()) {
-      RCLCPP_INFO(get_logger(), "Removing %zu attached objects", attached_objects.size());
-      std::vector<std::string> attached_object_ids;
-      for (const auto& obj : attached_objects) {
-        attached_object_ids.push_back(obj.first);
-      }
-      planning_scene_interface.removeCollisionObjects(attached_object_ids);
-    }
+    // // ロボットに取り付けられたオブジェクトも削除
+    // std::map<std::string, moveit_msgs::msg::AttachedCollisionObject> attached_objects = 
+    //     planning_scene_interface.getAttachedObjects();
+    // if (!attached_objects.empty()) {
+    //   RCLCPP_INFO(get_logger(), "Removing %zu attached objects", attached_objects.size());
+    //   std::vector<std::string> attached_object_ids;
+    //   for (const auto& obj : attached_objects) {
+    //     attached_object_ids.push_back(obj.first);
+    //   }
+    //   planning_scene_interface.removeCollisionObjects(attached_object_ids);
+    // }
     
-    RCLCPP_INFO(get_logger(), "Planning scene cleared");
+    // RCLCPP_INFO(get_logger(), "Planning scene cleared");
 
     // Apply path constraints if provided
     if (!goal->constraints.name.empty() || 
@@ -280,14 +288,14 @@ private:
     }
 
     // Apply planning scene diff if provided
-    if (!goal->planning_scene.name.empty() ||
-        !goal->planning_scene.world.collision_objects.empty() ||
-        goal->planning_scene.is_diff) {
-      RCLCPP_INFO(get_logger(), "Applying planning scene");
+    // if (!goal->planning_scene.name.empty() ||
+    //     !goal->planning_scene.world.collision_objects.empty() ||
+    //     goal->planning_scene.is_diff) {
+    //   RCLCPP_INFO(get_logger(), "Applying planning scene");
       
-      // Apply the entire planning scene diff
-      planning_scene_interface.applyPlanningScene(goal->planning_scene);
-    }
+    //   // Apply the entire planning scene diff
+    //   planning_scene_interface.applyPlanningScene(goal->planning_scene);
+    // }
 
     if (cancel_if_needed(move_group_.get())) return;
 
@@ -901,7 +909,23 @@ private:
     out_state.is_diff = true;
     return true;
   }  
-  
+
+  void handle_apply_planning_scene
+    (const std::shared_ptr<moveit_msgs::srv::ApplyPlanningScene::Request> request,
+     std::shared_ptr<moveit_msgs::srv::ApplyPlanningScene::Response> response)
+  {
+    RCLCPP_INFO(get_logger(), "ApplyPlanningScene service called");
+    try {
+      moveit::planning_interface::PlanningSceneInterface psi;
+      psi.applyPlanningScene(request->scene);
+      response->success = true;
+      RCLCPP_INFO(get_logger(), "Applied planning scene successfully");
+    } catch (const std::exception& e) {
+      response->success = false;
+      RCLCPP_ERROR(get_logger(), "Failed to apply planning scene: %s", e.what());
+    }
+  }
+
 };
 
 int main(int argc, char** argv)
