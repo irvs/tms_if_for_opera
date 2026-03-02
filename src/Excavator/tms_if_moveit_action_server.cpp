@@ -15,7 +15,6 @@
 #include "geometry_msgs/msg/pose.hpp"
 
 #include "moveit_msgs/msg/move_it_error_codes.hpp"
-#include "moveit_msgs/action/move_group_sequence.hpp"
 
 #include "moveit/move_group_interface/move_group_interface.h"
 #include "moveit/planning_scene_interface/planning_scene_interface.h"
@@ -23,6 +22,7 @@
 #include "moveit/robot_model_loader/robot_model_loader.h"
 #include "moveit/robot_model/robot_model.h"
 #include "moveit/robot_state/robot_state.h"
+#include "moveit/trajectory_processing/time_optimal_trajectory_generation.h"
 
 #include "tms_msg_rp/action/tms_rp_excavator.hpp"
 #include "tms_msg_rp/srv/tms_rp_excavator_param_get.hpp"
@@ -33,7 +33,6 @@ using TmsRpExcavator = tms_msg_rp::action::TmsRpExcavator;
 using GoalHandleTms = rclcpp_action::ServerGoalHandle<TmsRpExcavator>;
 using TmsRpExcavatorParamGet = tms_msg_rp::srv::TmsRpExcavatorParamGet;
 using TmsRpExcavatorParamSet = tms_msg_rp::srv::TmsRpExcavatorParamSet;
-using MoveGroupSequence = moveit_msgs::action::MoveGroupSequence;
 
 class TmsIfMoveItActionServer : public rclcpp::Node
 {
@@ -103,12 +102,6 @@ public:
       std::bind(&TmsIfMoveItActionServer::handle_param_set, this, std::placeholders::_1, std::placeholders::_2)
     );
 
-    // MoveGroupSequenceアクションクライアントの作成
-    move_group_sequence_client_ = rclcpp_action::create_client<MoveGroupSequence>(
-      this, 
-      "sequence_move_group"
-    );
-
     apply_planning_scene_server_ = this->create_service<moveit_msgs::srv::ApplyPlanningScene>(
       "tms_rp_excavator_apply_planning_scene",
       std::bind(&TmsIfMoveItActionServer::handle_apply_planning_scene, this, std::placeholders::_1, std::placeholders::_2)
@@ -142,18 +135,9 @@ private:
   std::string current_planner_id_;
   std::string current_planning_pipeline_id_;
 
-  // last plan cache
-  std::mutex plan_mtx_;
-  moveit::planning_interface::MoveGroupInterface::Plan last_plan_;
-  bool has_last_plan_{false};
-
   // サービスサーバー
   rclcpp::Service<TmsRpExcavatorParamGet>::SharedPtr param_get_service_;
   rclcpp::Service<TmsRpExcavatorParamSet>::SharedPtr param_set_service_;
-
-  // MoveGroupSequenceアクションクライアント
-  rclcpp_action::Client<MoveGroupSequence>::SharedPtr move_group_sequence_client_;
-
   rclcpp::Service<moveit_msgs::srv::ApplyPlanningScene>::SharedPtr apply_planning_scene_server_;
 
   rclcpp_action::GoalResponse handle_goal(
@@ -162,28 +146,10 @@ private:
   {
     RCLCPP_INFO(get_logger(), "=== Received Goal ===");
     RCLCPP_INFO(get_logger(), "  Command: %d", goal->command);
-    RCLCPP_INFO(get_logger(), "  Planning group: %s (ignored, using fixed planning_group from parameter)", goal->planning_group.c_str());
-    RCLCPP_INFO(get_logger(), "  Pose sequence size: %zu", goal->pose_sequence.size());
-    RCLCPP_INFO(get_logger(), "  Joint values sequence size: %zu", goal->joint_values_sequence.size());
+    RCLCPP_INFO(get_logger(), "  Planning group: %s", goal->planning_group.c_str());
     
-    // 注意: 現在の実装では、ゴールで指定されたplanning_groupは無視され、
-    // コンストラクタで初期化した固定のplanning_groupが使用されます。
-    // 動的にplanning_groupを切り替えたい場合は、execute()内で
-    // MoveGroupInterfaceを毎回初期化する必要があります。
-    
-    // コマンドに応じて planning_group が必要かチェック
-    const bool needs_group =
-      goal->command == TmsRpExcavator::Goal::CMD_PLAN_TO_POSE ||
-      goal->command == TmsRpExcavator::Goal::CMD_PLAN_TO_JOINTS ||
-      goal->command == TmsRpExcavator::Goal::CMD_PLAN_AND_EXECUTE_POSE ||
-      goal->command == TmsRpExcavator::Goal::CMD_PLAN_AND_EXECUTE_JOINTS ||
-      goal->command == TmsRpExcavator::Goal::CMD_EXECUTE_LAST_PLAN ||
-      goal->command == TmsRpExcavator::Goal::CMD_EXECUTE_PLAN ||
-      goal->command == TmsRpExcavator::Goal::CMD_PLAN_MOTION_SEQUENCE ||
-      goal->command == TmsRpExcavator::Goal::CMD_PLAN_AND_EXECUTE_MOTION_SEQUENCE;
-
-    if (needs_group && goal->planning_group.empty()) {
-      RCLCPP_WARN(get_logger(), "Rejected: planning_group is empty for this command.");
+    if (goal->planning_group.empty()) {
+      RCLCPP_WARN(get_logger(), "Rejected: planning_group is empty.");
       return rclcpp_action::GoalResponse::REJECT;
     }
     
@@ -229,10 +195,10 @@ private:
       else goal_handle->abort(result);
     };
 
-    auto cancel_if_needed = [&](moveit::planning_interface::MoveGroupInterface* mg)->bool{
+    auto cancel_if_needed = [&]()->bool{
       if (goal_handle->is_canceling()) {
         RCLCPP_WARN(get_logger(), "Goal is being canceled");
-        if (mg) mg->stop();
+        move_group_->stop();
         result->success = false;
         result->moveit_error_code = moveit_msgs::msg::MoveItErrorCodes::PREEMPTED;
         result->message = "Canceled.";
@@ -244,38 +210,9 @@ private:
 
     publish_fb("received", 0.05f);
 
-    // ---- commands requiring MoveGroup ----
-    publish_fb("initializing_move_group", 0.15f);
-    
-    RCLCPP_INFO(get_logger(), "Using MoveGroupInterface with planning_group: %s", planning_group_.c_str());
-
     // 前回のゴールで設定された制約をクリア
     move_group_->clearPathConstraints();
     RCLCPP_INFO(get_logger(), "Cleared previous path constraints");
-
-    // // Planning sceneをクリーンな状態に初期化
-    // moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
-    
-    // // すべての既存の障害物（collision objects）を削除
-    // std::vector<std::string> object_ids = planning_scene_interface.getKnownObjectNames();
-    // if (!object_ids.empty()) {
-    //   RCLCPP_INFO(get_logger(), "Removing %zu existing collision objects", object_ids.size());
-    //   planning_scene_interface.removeCollisionObjects(object_ids);
-    // }
-    
-    // // ロボットに取り付けられたオブジェクトも削除
-    // std::map<std::string, moveit_msgs::msg::AttachedCollisionObject> attached_objects = 
-    //     planning_scene_interface.getAttachedObjects();
-    // if (!attached_objects.empty()) {
-    //   RCLCPP_INFO(get_logger(), "Removing %zu attached objects", attached_objects.size());
-    //   std::vector<std::string> attached_object_ids;
-    //   for (const auto& obj : attached_objects) {
-    //     attached_object_ids.push_back(obj.first);
-    //   }
-    //   planning_scene_interface.removeCollisionObjects(attached_object_ids);
-    // }
-    
-    // RCLCPP_INFO(get_logger(), "Planning scene cleared");
 
     // Apply path constraints if provided
     if (!goal->constraints.name.empty() || 
@@ -287,349 +224,227 @@ private:
       move_group_->setPathConstraints(goal->constraints);
     }
 
-    // Apply planning scene diff if provided
-    // if (!goal->planning_scene.name.empty() ||
-    //     !goal->planning_scene.world.collision_objects.empty() ||
-    //     goal->planning_scene.is_diff) {
-    //   RCLCPP_INFO(get_logger(), "Applying planning scene");
-      
-    //   // Apply the entire planning scene diff
-    //   planning_scene_interface.applyPlanningScene(goal->planning_scene);
-    // }
+    if (cancel_if_needed()) return;
 
-    if (cancel_if_needed(move_group_.get())) return;
-
-    // ---- Motion Sequence commands ----
-    if (goal->command == TmsRpExcavator::Goal::CMD_PLAN_MOTION_SEQUENCE ||
-        goal->command == TmsRpExcavator::Goal::CMD_PLAN_AND_EXECUTE_MOTION_SEQUENCE)
-    {
-      publish_fb("preparing_motion_sequence", 0.25f);
-
-      if (goal->motion_sequence_items.empty()) {
-        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, "motion_sequence_items is empty.");
-        return;
-      }
-
-      RCLCPP_INFO(get_logger(), "Processing motion sequence with %zu items", goal->motion_sequence_items.size());
-
-      // MoveGroupSequenceアクションクライアントが利用可能か確認
-      if (!move_group_sequence_client_->wait_for_action_server(std::chrono::seconds(5))) {
-        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, 
-               "MoveGroupSequence action server not available.");
-        return;
-      }
-
-      // MoveGroupSequenceゴールを作成
-      auto sequence_goal = MoveGroupSequence::Goal();
-      sequence_goal.request.items = goal->motion_sequence_items;
-
-      if (!sequence_goal.request.items.empty()) {
-        if (const auto* prev = pickPrevTrajectory(goal->previous_pose)) {
-          moveit_msgs::msg::RobotState rs;
-          if (fillRobotStateFromPrevTrajectoryLastPoint(*prev, rs, get_logger())) {
-            sequence_goal.request.items[0].req.start_state = rs;
-            RCLCPP_INFO(get_logger(), "Injected start_state into motion_sequence item[0].");
-          }
-        }
-      }
-      
-      // Planning optionsを設定
-      sequence_goal.planning_options.planning_scene_diff = goal->planning_scene;
-      
-      // CMD_PLAN_MOTION_SEQUENCEの場合はプランのみ
-      if (goal->command == TmsRpExcavator::Goal::CMD_PLAN_MOTION_SEQUENCE) {
-        sequence_goal.planning_options.plan_only = true;
-        RCLCPP_INFO(get_logger(), "Plan only mode for motion sequence");
-      } else {
-        sequence_goal.planning_options.plan_only = false;
-        RCLCPP_INFO(get_logger(), "Plan and execute mode for motion sequence");
-      }
-
-      if (cancel_if_needed(move_group_.get())) return;
-
-      publish_fb("sending_sequence_goal", 0.35f);
-
-      // ゴールを送信
-      auto send_goal_options = rclcpp_action::Client<MoveGroupSequence>::SendGoalOptions();
-      
-      // フィードバックコールバック
-      send_goal_options.feedback_callback = 
-        [&](rclcpp_action::ClientGoalHandle<MoveGroupSequence>::SharedPtr,
-            const std::shared_ptr<const MoveGroupSequence::Feedback> sequence_feedback)
-        {
-          RCLCPP_INFO(get_logger(), "Sequence feedback: %s", sequence_feedback->state.c_str());
-          publish_fb("sequence_" + sequence_feedback->state, 0.5f);
-        };
-
-      // 結果を受け取るための変数
-      std::promise<MoveGroupSequence::Result::SharedPtr> result_promise;
-      auto result_future = result_promise.get_future();
-
-      // 結果コールバック
-      send_goal_options.result_callback = 
-        [&](const rclcpp_action::ClientGoalHandle<MoveGroupSequence>::WrappedResult& wrapped_result)
-        {
-          result_promise.set_value(wrapped_result.result);
-        };
-
-      auto goal_handle_future = move_group_sequence_client_->async_send_goal(sequence_goal, send_goal_options);
-
-      // ゴールが受け入れられるまで待機
-      if (goal_handle_future.wait_for(std::chrono::seconds(5)) != std::future_status::ready) {
-        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, 
-               "Failed to send motion sequence goal.");
-        return;
-      }
-
-      auto goal_handle = goal_handle_future.get();
-      if (!goal_handle) {
-        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, 
-               "Motion sequence goal was rejected.");
-        return;
-      }
-
-      RCLCPP_INFO(get_logger(), "Motion sequence goal accepted, waiting for result...");
-
-      if (cancel_if_needed(move_group_.get())) return;
-
-      publish_fb("executing_sequence", 0.50f);
-
-      // 結果を待機
-      auto wait_result = result_future.wait_for(std::chrono::seconds(300)); // 5分のタイムアウト
-      
-      if (wait_result != std::future_status::ready) {
-        // タイムアウトまたはキャンセル
-        move_group_sequence_client_->async_cancel_goal(goal_handle);
-        finish(false, moveit_msgs::msg::MoveItErrorCodes::TIMED_OUT, 
-               "Motion sequence execution timed out.");
-        return;
-      }
-
-      auto sequence_result = result_future.get();
-
-      if (cancel_if_needed(move_group_.get())) return;
-
-      // 結果を処理
-      if (sequence_result->response.error_code.val == moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
-        RCLCPP_INFO(get_logger(), "Motion sequence completed successfully");
-        
-        // 計画された軌道をresultに格納
-        if (!sequence_result->response.planned_trajectories.empty()) {
-          result->plan = sequence_result->response.planned_trajectories;
-          RCLCPP_INFO(get_logger(), "Stored %zu planned trajectories", result->plan.size());
-        }
-
-        if (goal->command == TmsRpExcavator::Goal::CMD_PLAN_MOTION_SEQUENCE) {
-          finish(true, moveit_msgs::msg::MoveItErrorCodes::SUCCESS, 
-                 "Motion sequence planned successfully.");
-        } else {
-          finish(true, moveit_msgs::msg::MoveItErrorCodes::SUCCESS, 
-                 "Motion sequence executed successfully.");
-        }
-      } else {
-        std::string error_msg = "Motion sequence failed with error code: " + 
-                               std::to_string(sequence_result->response.error_code.val);
-        RCLCPP_ERROR(get_logger(), "%s", error_msg.c_str());
-        finish(false, sequence_result->response.error_code.val, error_msg);
-      }
-      
-      return;
-    }
-
-    if (goal->command == TmsRpExcavator::Goal::CMD_EXECUTE_LAST_PLAN) {
-      publish_fb("executing_last_plan", 0.3f);
-
-      moveit::planning_interface::MoveGroupInterface::Plan plan_copy;
-      {
-        std::lock_guard<std::mutex> lk(plan_mtx_);
-        if (!has_last_plan_) {
-          finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, "No last plan.");
-          return;
-        }
-        plan_copy = last_plan_;
-      }
-
-      if (cancel_if_needed(move_group_.get())) return;
-
-      auto exec_res = move_group_->execute(plan_copy);
-      if (exec_res == moveit::core::MoveItErrorCode::SUCCESS) {
-        finish(true, moveit_msgs::msg::MoveItErrorCodes::SUCCESS, "Executed last plan.");
-      } else {
-        finish(false, exec_res.val, "Execute last plan failed.");
-      }
-      return;
-    }
-
+    // ---- CMD_EXECUTE_PLAN ----
     if (goal->command == TmsRpExcavator::Goal::CMD_EXECUTE_PLAN) {
-      publish_fb("executing_provided_plan", 0.3f);
+      publish_fb("executing_plan", 0.3f);
 
-      if (goal->plan.empty()) {
+      if (goal->plans.empty()) {
         finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, "No plan provided.");
         return;
       }
 
-      RCLCPP_INFO(get_logger(), "Executing %zu trajectory(ies) from provided plan", goal->plan.size());
+      RCLCPP_INFO(get_logger(), "Combining %zu trajectory(ies) by adjusting time_from_start", goal->plans.size());
 
-      // 複数のtrajectoryを順次実行
-      for (size_t i = 0; i < goal->plan.size(); ++i) {
-        if (cancel_if_needed(move_group_.get())) return;
+      // 複数のtrajectoryを時間を調整して結合
+      moveit_msgs::msg::RobotTrajectory combined_trajectory;
+      rclcpp::Duration accumulated_time(0, 0);  // 累積時間
 
-        moveit::planning_interface::MoveGroupInterface::Plan plan_to_execute;
-        plan_to_execute.trajectory_ = goal->plan[i];
+      for (size_t i = 0; i < goal->plans.size(); ++i) {
+        if (cancel_if_needed()) return;
 
-        publish_fb("executing_trajectory_" + std::to_string(i+1), 0.3f + 0.4f * (float)i / goal->plan.size());
-
-        auto exec_res = move_group_->execute(plan_to_execute);
-
-        if (exec_res != moveit::core::MoveItErrorCode::SUCCESS) {
-          finish(false, exec_res.val, "Execute plan failed at trajectory " + std::to_string(i+1));
-          return;
+        const auto& current_traj = goal->plans[i];
+        
+        if (current_traj.joint_trajectory.points.empty()) {
+          RCLCPP_WARN(get_logger(), "Trajectory %zu is empty, skipping", i+1);
+          continue;
         }
 
-        RCLCPP_INFO(get_logger(), "Executed trajectory %zu/%zu", i+1, goal->plan.size());
+        if (i == 0) {
+          // 最初のtrajectoryはそのまま使用
+          combined_trajectory = current_traj;
+          
+          // 最後のポイントの時刻を取得
+          const auto& last_point = combined_trajectory.joint_trajectory.points.back();
+          accumulated_time = last_point.time_from_start;
+          
+          double duration_sec = accumulated_time.nanoseconds() * 1e-9;
+          RCLCPP_INFO(get_logger(), "Trajectory 1/%zu: %zu waypoints, duration=%.2f sec", 
+                      goal->plans.size(),
+                      combined_trajectory.joint_trajectory.points.size(),
+                      duration_sec);
+        } else {
+          // 2番目以降は時間をオフセットして追加
+          // 最初のポイント（前のtrajectoryの最後と重複）はスキップ
+          for (size_t j = 1; j < current_traj.joint_trajectory.points.size(); ++j) {
+            const auto& point = current_traj.joint_trajectory.points[j];
+            auto adjusted_point = point;
+            // 累積時間を加算
+            adjusted_point.time_from_start = accumulated_time + point.time_from_start;
+            combined_trajectory.joint_trajectory.points.push_back(adjusted_point);
+          }
+          
+          // 最後のポイントの時刻を更新
+          const auto& last_point = combined_trajectory.joint_trajectory.points.back();
+          accumulated_time = last_point.time_from_start;
+          
+          double duration_sec = accumulated_time.nanoseconds() * 1e-9;
+          RCLCPP_INFO(get_logger(), "Trajectory %zu/%zu: added %zu waypoints (skipped first), total duration=%.2f sec", 
+                      i+1, goal->plans.size(),
+                      current_traj.joint_trajectory.points.size() - 1,
+                      duration_sec);
+        }
       }
 
+      double total_duration_sec = accumulated_time.nanoseconds() * 1e-9;
+      RCLCPP_INFO(get_logger(), "Combined trajectory: %zu total waypoints, %.2f sec total duration",
+                  combined_trajectory.joint_trajectory.points.size(),
+                  total_duration_sec);
+
+      // 時間が厳密に増加していることを検証
+      for (size_t i = 1; i < combined_trajectory.joint_trajectory.points.size(); ++i) {
+        const auto& prev_time = combined_trajectory.joint_trajectory.points[i-1].time_from_start;
+        const auto& curr_time = combined_trajectory.joint_trajectory.points[i].time_from_start;
+        
+        // time_from_startを秒単位に変換して比較
+        double prev_sec = prev_time.sec + prev_time.nanosec * 1e-9;
+        double curr_sec = curr_time.sec + curr_time.nanosec * 1e-9;
+        
+        if (curr_sec <= prev_sec) {
+          RCLCPP_ERROR(get_logger(), "Time between points %zu and %zu is not strictly increasing: %.6f and %.6f",
+                       i-1, i, prev_sec, curr_sec);
+          finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, 
+                 "Time is not strictly increasing between waypoints.");
+          return;
+        }
+      }
+      
+      RCLCPP_INFO(get_logger(), "Time validation passed: all waypoints have strictly increasing time");
+
+      publish_fb("executing_combined_trajectory", 0.7f);
+
+      moveit::planning_interface::MoveGroupInterface::Plan final_plan;
+      final_plan.trajectory_ = combined_trajectory;
+
+      auto exec_res = move_group_->execute(final_plan);
+
+      if (exec_res != moveit::core::MoveItErrorCode::SUCCESS) {
+        finish(false, exec_res.val, "Execute combined trajectory failed.");
+        return;
+      }
+
+      publish_fb("execution_complete", 0.95f);
       finish(true, moveit_msgs::msg::MoveItErrorCodes::SUCCESS, 
-             "Executed all " + std::to_string(goal->plan.size()) + " trajectory(ies).");
+             "Successfully executed combined trajectory with " + std::to_string(goal->plans.size()) + " segments.");
       return;
     }
 
-    // ---- planning/execution ----
-    moveit::planning_interface::MoveGroupInterface::Plan plan;
-
-    if (goal->command == TmsRpExcavator::Goal::CMD_PLAN_TO_POSE ||
-        goal->command == TmsRpExcavator::Goal::CMD_PLAN_AND_EXECUTE_POSE)
+    // ---- CMD_PLAN_TO_POSE ----
+    if (goal->command == TmsRpExcavator::Goal::CMD_PLAN_TO_POSE)
     {
-      publish_fb("setting_pose_targets", 0.25f);
+      publish_fb("setting_pose_target", 0.25f);
 
-      if (goal->pose_sequence.empty()) {
-        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, "pose_sequence is empty.");
-        return;
-      }
+      // Set start state from previous trajectory if provided
       if (const auto* prev = pickPrevTrajectory(goal->previous_pose)) {
         if (!setStartStateFromPrevRobotTrajectory(*prev, *move_group_, planning_group_, get_logger())) {
+          finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, "Failed to set start state from previous trajectory.");
           return;
         }
       } else {
         move_group_->setStartStateToCurrentState();
-      } 
+      }
 
-      // pose_sequenceの最初のポーズをターゲットとして設定
-      move_group_->setPoseTarget(goal->pose_sequence[0]);
+      move_group_->setPoseTarget(goal->pose);
 
-      if (cancel_if_needed(move_group_.get())) return;
+      if (cancel_if_needed()) return;
 
-      publish_fb("planning", 0.45f);
+      publish_fb("planning", 0.50f);
 
+      moveit::planning_interface::MoveGroupInterface::Plan plan;
       auto plan_res = move_group_->plan(plan);
+      
       if (plan_res != moveit::core::MoveItErrorCode::SUCCESS) {
         finish(false, plan_res.val, "Planning to pose failed.");
         return;
       }
+
+      // Store plan in result
+      result->plan = plan.trajectory_;
+      
+      publish_fb("plan_complete", 0.95f);
+      finish(true, moveit_msgs::msg::MoveItErrorCodes::SUCCESS, "Planned successfully.");
+      return;
     }
-    else if (goal->command == TmsRpExcavator::Goal::CMD_PLAN_TO_JOINTS ||
-             goal->command == TmsRpExcavator::Goal::CMD_PLAN_AND_EXECUTE_JOINTS)
+
+    // ---- CMD_PLAN_TO_JOINTS ----
+    if (goal->command == TmsRpExcavator::Goal::CMD_PLAN_TO_JOINTS)
     {
-      publish_fb("setting_joint_targets", 0.25f);
+      publish_fb("setting_joint_target", 0.25f);
 
-      if (goal->joint_values_sequence.empty()) {
-        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, "joint_values_sequence is empty.");
-        return;
-      }
-
+      // Set start state from previous trajectory if provided
       if (const auto* prev = pickPrevTrajectory(goal->previous_pose)) {
         if (!setStartStateFromPrevRobotTrajectory(*prev, *move_group_, planning_group_, get_logger())) {
+          finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, "Failed to set start state from previous trajectory.");
           return;
         }
       } else {
         move_group_->setStartStateToCurrentState();
       }
 
-      // joint_values_sequenceの最初の値をターゲットとして設定
-      const auto& jv = goal->joint_values_sequence[0];
+      // Validate joint values
+      const auto& jv = goal->joint_values;
       if (jv.joint_names.size() != jv.joint_values.size() || jv.joint_names.empty()) {
         finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
                "joint_names and joint_values mismatch/empty.");
         return;
       }
 
+      // Build joint target map
       std::map<std::string, double> joint_map;
       for (size_t i = 0; i < jv.joint_names.size(); ++i) {
         joint_map[jv.joint_names[i]] = jv.joint_values[i];
       }
+
+      // Fill in missing joints with current values
       auto current_state = move_group_->getCurrentState();
       const auto* jmg = current_state->getJointModelGroup(planning_group_);
       if (!jmg) {
         finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
-                "JointModelGroup not found for planning_group: " + planning_group_);
+               "JointModelGroup not found for planning_group: " + planning_group_);
         return;
       }
-    
+
       const auto& active_names = jmg->getActiveJointModelNames();
-    
       std::vector<double> curr_positions;
       current_state->copyJointGroupPositions(jmg, curr_positions);
-    
+
       if (active_names.size() != curr_positions.size()) {
         finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
-                "Active joint names and positions size mismatch.");
+               "Active joint names and positions size mismatch.");
         return;
       }
-    
+
       for (size_t i = 0; i < active_names.size(); ++i) {
         if (joint_map.find(active_names[i]) == joint_map.end()) {
           joint_map[active_names[i]] = curr_positions[i];
         }
       }
-    move_group_->setJointValueTarget(joint_map);
-      
 
-      if (cancel_if_needed(move_group_.get())) return;
+      move_group_->setJointValueTarget(joint_map);
 
-      publish_fb("planning", 0.45f);
+      if (cancel_if_needed()) return;
 
+      publish_fb("planning", 0.50f);
+
+      moveit::planning_interface::MoveGroupInterface::Plan plan;
       auto plan_res = move_group_->plan(plan);
+      
       if (plan_res != moveit::core::MoveItErrorCode::SUCCESS) {
         finish(false, plan_res.val, "Planning to joints failed.");
         return;
       }
-    }
-    else {
-      finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, "Unknown command.");
+
+      // Store plan in result
+      result->plan = plan.trajectory_;
+      
+      publish_fb("plan_complete", 0.95f);
+      finish(true, moveit_msgs::msg::MoveItErrorCodes::SUCCESS, "Planned successfully.");
       return;
     }
 
-    // cache last plan
-    {
-      std::lock_guard<std::mutex> lk(plan_mtx_);
-      last_plan_ = plan;
-      has_last_plan_ = true;
-    }
-
-    // Resultにplanを格納
-    result->plan.push_back(plan.trajectory_);
-
-    if (cancel_if_needed(move_group_.get())) return;
-
-    // PLAN only
-    if (goal->command == TmsRpExcavator::Goal::CMD_PLAN_TO_POSE ||
-        goal->command == TmsRpExcavator::Goal::CMD_PLAN_TO_JOINTS)
-    {
-      finish(true, moveit_msgs::msg::MoveItErrorCodes::SUCCESS, "Planned (cached as last plan).");
-      return;
-    }
-
-    // PLAN + EXECUTE
-    publish_fb("executing", 0.75f);
-
-    if (cancel_if_needed(move_group_.get())) return;
-
-    auto exec_res = move_group_->execute(plan);
-    if (exec_res == moveit::core::MoveItErrorCode::SUCCESS) {
-      finish(true, moveit_msgs::msg::MoveItErrorCodes::SUCCESS, "Executed.");
-    } else {
-      finish(false, exec_res.val, "Execute failed.");
-    }
+    // Unknown command
+    finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, "Unknown command.");
   }
 
   // -------- Service Handlers --------
@@ -642,7 +457,6 @@ private:
 
     try {
       if (request->get_joint_limits) {
-        // ロボットモデルを取得
         const moveit::core::RobotModelConstPtr& robot_model = move_group_->getRobotModel();
         const moveit::core::JointModelGroup* joint_model_group = 
             robot_model->getJointModelGroup(planning_group_);
@@ -654,18 +468,15 @@ private:
           return;
         }
 
-        // 関節名のリストを取得
         const std::vector<std::string>& joint_names = joint_model_group->getActiveJointModelNames();
         response->joint_names = joint_names;
 
-        // 各関節の制限を取得
         for (const auto& joint_name : joint_names) {
           const moveit::core::JointModel* joint_model = robot_model->getJointModel(joint_name);
           if (!joint_model) continue;
 
           const moveit::core::JointModel::Bounds& bounds = joint_model->getVariableBounds();
           
-          // 最初の変数の制限を取得（ほとんどの関節は1自由度）
           if (!bounds.empty()) {
             response->min_positions.push_back(bounds[0].min_position_);
             response->max_positions.push_back(bounds[0].max_position_);
@@ -685,9 +496,8 @@ private:
         state->copyJointGroupPositions(
             state->getJointModelGroup(planning_group_),
             js.position);
-          response->joint_states = js;
+        response->joint_states = js;
 
-        // 現在のエンドエフェクタ位置を取得
         geometry_msgs::msg::PoseStamped current_pose_stamped = move_group_->getCurrentPose();
         response->current_ee_pose = current_pose_stamped.pose;
 
@@ -699,7 +509,6 @@ private:
       }
       
       if (request->get_configuration) {
-        // 現在の設定値を取得（Getterがある値と保存した値）
         response->goal_position_tolerance = move_group_->getGoalPositionTolerance();
         response->goal_orientation_tolerance = move_group_->getGoalOrientationTolerance();
         response->goal_joint_tolerance = move_group_->getGoalJointTolerance();
@@ -735,7 +544,6 @@ private:
     RCLCPP_INFO(get_logger(), "TmsRpExcavatorParamSet service called");
 
     try {
-      // 各パラメータを設定（負の値やNaNは無視）
       if (request->goal_position_tolerance >= 0.0 && !std::isnan(request->goal_position_tolerance)) {
         move_group_->setGoalPositionTolerance(request->goal_position_tolerance);
         RCLCPP_INFO(get_logger(), "Set goal position tolerance: %.4f", request->goal_position_tolerance);
@@ -779,14 +587,12 @@ private:
       move_group_->allowReplanning(request->allow_replanning);
       RCLCPP_INFO(get_logger(), "Set allow replanning: %s", request->allow_replanning ? "true" : "false");
 
-      // planning_pipeline_idが指定されている場合は設定
       if (!request->planning_pipeline_id.empty()) {
         move_group_->setPlanningPipelineId(request->planning_pipeline_id);
         current_planning_pipeline_id_ = request->planning_pipeline_id;
         RCLCPP_INFO(get_logger(), "Set planning pipeline ID: %s", request->planning_pipeline_id.c_str());
       }
 
-      // planner_idが指定されている場合は設定
       if (!request->planner_id.empty()) {
         move_group_->setPlannerId(request->planner_id);
         current_planner_id_ = request->planner_id;
@@ -845,14 +651,12 @@ private:
       return false;
     }
   
-    // joint_name -> position の辞書を作る
     std::unordered_map<std::string, double> name_to_pos;
     name_to_pos.reserve(jt.joint_names.size());
     for (size_t i = 0; i < jt.joint_names.size(); ++i) {
       name_to_pos[jt.joint_names[i]] = last_pt.positions[i];
     }
   
-    // planning_group の active joints だけ取り出してセット
     const auto& active = jmg->getActiveJointModelNames();
     std::vector<double> group_positions;
     group_positions.reserve(active.size());
@@ -881,38 +685,15 @@ private:
     const std::vector<moveit_msgs::msg::RobotTrajectory>& prev_vec)
   {
     if (prev_vec.empty()) return nullptr;
-    const auto& t = prev_vec.back();  // 「最後のtrajectory」を採用
+    const auto& t = prev_vec.back();
     if (t.joint_trajectory.joint_names.empty()) return nullptr;
     if (t.joint_trajectory.points.empty()) return nullptr;
     return &t;
-  }  
+  }
 
-  static bool fillRobotStateFromPrevTrajectoryLastPoint(
-    const moveit_msgs::msg::RobotTrajectory& prev_traj,
-    moveit_msgs::msg::RobotState& out_state,
-    const rclcpp::Logger& logger)
-  {
-    const auto& jt = prev_traj.joint_trajectory;
-    if (jt.joint_names.empty() || jt.points.empty()) {
-      RCLCPP_WARN(logger, "prev_traj empty; cannot make RobotState.");
-      return false;
-    }
-    const auto& last = jt.points.back();
-    if (last.positions.size() != jt.joint_names.size()) {
-      RCLCPP_ERROR(logger, "size mismatch: names=%zu pos=%zu",
-                   jt.joint_names.size(), last.positions.size());
-      return false;
-    }
-  
-    out_state.joint_state.name = jt.joint_names;
-    out_state.joint_state.position = last.positions;
-    out_state.is_diff = true;
-    return true;
-  }  
-
-  void handle_apply_planning_scene
-    (const std::shared_ptr<moveit_msgs::srv::ApplyPlanningScene::Request> request,
-     std::shared_ptr<moveit_msgs::srv::ApplyPlanningScene::Response> response)
+  void handle_apply_planning_scene(
+    const std::shared_ptr<moveit_msgs::srv::ApplyPlanningScene::Request> request,
+    std::shared_ptr<moveit_msgs::srv::ApplyPlanningScene::Response> response)
   {
     RCLCPP_INFO(get_logger(), "ApplyPlanningScene service called");
     try {
@@ -925,7 +706,6 @@ private:
       RCLCPP_ERROR(get_logger(), "Failed to apply planning scene: %s", e.what());
     }
   }
-
 };
 
 int main(int argc, char** argv)
