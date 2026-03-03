@@ -230,103 +230,29 @@ private:
     if (goal->command == TmsRpExcavator::Goal::CMD_EXECUTE_PLAN) {
       publish_fb("executing_plan", 0.3f);
 
-      if (goal->plans.empty()) {
+      if (goal->plan.joint_trajectory.points.empty()) {
         finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, "No plan provided.");
         return;
       }
 
-      RCLCPP_INFO(get_logger(), "Combining %zu trajectory(ies) by adjusting time_from_start", goal->plans.size());
+      RCLCPP_INFO(get_logger(), "Executing plan with %zu waypoints", 
+                  goal->plan.joint_trajectory.points.size());
 
-      // 複数のtrajectoryを時間を調整して結合
-      moveit_msgs::msg::RobotTrajectory combined_trajectory;
-      rclcpp::Duration accumulated_time(0, 0);  // 累積時間
-
-      for (size_t i = 0; i < goal->plans.size(); ++i) {
-        if (cancel_if_needed()) return;
-
-        const auto& current_traj = goal->plans[i];
-        
-        if (current_traj.joint_trajectory.points.empty()) {
-          RCLCPP_WARN(get_logger(), "Trajectory %zu is empty, skipping", i+1);
-          continue;
-        }
-
-        if (i == 0) {
-          // 最初のtrajectoryはそのまま使用
-          combined_trajectory = current_traj;
-          
-          // 最後のポイントの時刻を取得
-          const auto& last_point = combined_trajectory.joint_trajectory.points.back();
-          accumulated_time = last_point.time_from_start;
-          
-          double duration_sec = accumulated_time.nanoseconds() * 1e-9;
-          RCLCPP_INFO(get_logger(), "Trajectory 1/%zu: %zu waypoints, duration=%.2f sec", 
-                      goal->plans.size(),
-                      combined_trajectory.joint_trajectory.points.size(),
-                      duration_sec);
-        } else {
-          // 2番目以降は時間をオフセットして追加
-          // 最初のポイント（前のtrajectoryの最後と重複）はスキップ
-          for (size_t j = 1; j < current_traj.joint_trajectory.points.size(); ++j) {
-            const auto& point = current_traj.joint_trajectory.points[j];
-            auto adjusted_point = point;
-            // 累積時間を加算
-            adjusted_point.time_from_start = accumulated_time + point.time_from_start;
-            combined_trajectory.joint_trajectory.points.push_back(adjusted_point);
-          }
-          
-          // 最後のポイントの時刻を更新
-          const auto& last_point = combined_trajectory.joint_trajectory.points.back();
-          accumulated_time = last_point.time_from_start;
-          
-          double duration_sec = accumulated_time.nanoseconds() * 1e-9;
-          RCLCPP_INFO(get_logger(), "Trajectory %zu/%zu: added %zu waypoints (skipped first), total duration=%.2f sec", 
-                      i+1, goal->plans.size(),
-                      current_traj.joint_trajectory.points.size() - 1,
-                      duration_sec);
-        }
-      }
-
-      double total_duration_sec = accumulated_time.nanoseconds() * 1e-9;
-      RCLCPP_INFO(get_logger(), "Combined trajectory: %zu total waypoints, %.2f sec total duration",
-                  combined_trajectory.joint_trajectory.points.size(),
-                  total_duration_sec);
-
-      // 時間が厳密に増加していることを検証
-      for (size_t i = 1; i < combined_trajectory.joint_trajectory.points.size(); ++i) {
-        const auto& prev_time = combined_trajectory.joint_trajectory.points[i-1].time_from_start;
-        const auto& curr_time = combined_trajectory.joint_trajectory.points[i].time_from_start;
-        
-        // time_from_startを秒単位に変換して比較
-        double prev_sec = prev_time.sec + prev_time.nanosec * 1e-9;
-        double curr_sec = curr_time.sec + curr_time.nanosec * 1e-9;
-        
-        if (curr_sec <= prev_sec) {
-          RCLCPP_ERROR(get_logger(), "Time between points %zu and %zu is not strictly increasing: %.6f and %.6f",
-                       i-1, i, prev_sec, curr_sec);
-          finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, 
-                 "Time is not strictly increasing between waypoints.");
-          return;
-        }
-      }
-      
-      RCLCPP_INFO(get_logger(), "Time validation passed: all waypoints have strictly increasing time");
-
-      publish_fb("executing_combined_trajectory", 0.7f);
+      publish_fb("executing_trajectory", 0.7f);
 
       moveit::planning_interface::MoveGroupInterface::Plan final_plan;
-      final_plan.trajectory_ = combined_trajectory;
+      final_plan.trajectory_ = goal->plan;
 
       auto exec_res = move_group_->execute(final_plan);
 
       if (exec_res != moveit::core::MoveItErrorCode::SUCCESS) {
-        finish(false, exec_res.val, "Execute combined trajectory failed.");
+        finish(false, exec_res.val, "Execute trajectory failed.");
         return;
       }
 
       publish_fb("execution_complete", 0.95f);
       finish(true, moveit_msgs::msg::MoveItErrorCodes::SUCCESS, 
-             "Successfully executed combined trajectory with " + std::to_string(goal->plans.size()) + " segments.");
+             "Successfully executed trajectory.");
       return;
     }
 
