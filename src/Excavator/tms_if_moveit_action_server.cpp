@@ -118,6 +118,7 @@ public:
 
   rclcpp::Node::SharedPtr get_move_group_node() const { return move_group_node_; }
   std::mutex move_group_mtx_;
+  std::atomic<bool> executing_{false};
 
 private:
   rclcpp_action::Server<TmsRpExcavator>::SharedPtr action_server_;
@@ -176,6 +177,8 @@ private:
 
   void execute(const std::shared_ptr<GoalHandleTms> goal_handle)
   {
+
+    executing_ = true;
 
     std::lock_guard<std::mutex> lk(move_group_mtx_);
     RCLCPP_INFO(get_logger(), ">>> Execute thread started");
@@ -376,6 +379,8 @@ private:
 
     // Unknown command
     finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, "Unknown command.");
+
+    executing_ = false;
   }
 
   // -------- Service Handlers --------
@@ -626,6 +631,13 @@ private:
     const std::shared_ptr<moveit_msgs::srv::ApplyPlanningScene::Request> request,
     std::shared_ptr<moveit_msgs::srv::ApplyPlanningScene::Response> response)
   {
+
+    if (executing_) {
+      response->success = false;
+      // response->message = "Busy: action is executing";
+      return;
+    }
+    std::lock_guard<std::mutex> lk(move_group_mtx_);
     RCLCPP_INFO(get_logger(), "ApplyPlanningScene service called");
     try {
       moveit::planning_interface::PlanningSceneInterface psi;
