@@ -66,11 +66,11 @@ public:
     );
     
     // Robot状態監視のため、専用のExecutorでスピン（detachで常駐）
-    executor_.add_node(move_group_node_);
-    std::thread([this]() { 
-      RCLCPP_INFO(this->get_logger(), "MoveGroup executor thread started");
-      executor_.spin(); 
-    }).detach();
+    // executor_.add_node(move_group_node_);
+    // std::thread([this]() { 
+    //   RCLCPP_INFO(this->get_logger(), "MoveGroup executor thread started");
+    //   executor_.spin(); 
+    // }).detach();
     
     RCLCPP_INFO(get_logger(), "MoveGroup node created: %s", move_group_node_->get_name());
     
@@ -115,6 +115,8 @@ public:
   {
     executor_.cancel();
   }
+
+  rclcpp::Node::SharedPtr get_move_group_node() const { return move_group_node_; }
 
 private:
   rclcpp_action::Server<TmsRpExcavator>::SharedPtr action_server_;
@@ -637,7 +639,16 @@ private:
 int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<TmsIfMoveItActionServer>());
+
+  auto server = std::make_shared<TmsIfMoveItActionServer>();
+
+  rclcpp::executors::MultiThreadedExecutor exec(rclcpp::ExecutorOptions(), 4);
+  exec.add_node(server);
+
+  // move_group_node_ を getter で取れるようにしておいて、それも add_node
+  exec.add_node(server->get_move_group_node());
+
+  exec.spin();
   rclcpp::shutdown();
   return 0;
 }
