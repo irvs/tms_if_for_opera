@@ -117,6 +117,7 @@ public:
   }
 
   rclcpp::Node::SharedPtr get_move_group_node() const { return move_group_node_; }
+  std::mutex move_group_mtx_;
 
 private:
   rclcpp_action::Server<TmsRpExcavator>::SharedPtr action_server_;
@@ -175,6 +176,8 @@ private:
 
   void execute(const std::shared_ptr<GoalHandleTms> goal_handle)
   {
+
+    std::lock_guard<std::mutex> lk(move_group_mtx_);
     RCLCPP_INFO(get_logger(), ">>> Execute thread started");
     
     const auto goal = goal_handle->get_goal();
