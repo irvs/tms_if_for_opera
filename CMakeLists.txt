@@ -11,20 +11,14 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 set(EXCAVATOR_TARGETS
-  excavator_change_pose_action_server
-  excavator_change_pose_plan_action_server
-  excavator_level_action_server
-  excavator_gather_action_server
-  excavator_excavate_simple_action_server
-  excavator_excavate_simple_plan_action_server
-  excavator_release_simple_action_server
+  tms_if_moveit_action_server
+  # excavator_assist_excavation_pose_to_joint_angles
   excavator_navigate_through_poses
   excavator_navigate_through_poses_deg
   excavator_navigate_anywhere
   excavator_navigate_anywhere_deg
   excavator_follow_waypoints
   excavator_follow_waypoints_deg
-  scene_manager
 )
 
 set(CRAWLERDUMP_TARGETS
@@ -63,13 +57,6 @@ find_package(mongocxx REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(com3_msgs REQUIRED)
 
-add_library(excavator_ik SHARED src/Excavator/lib/excavator_ik.cpp)
-add_library(excavator_pose_converter SHARED src/Excavator/lib/excavator_pose_converter.cpp)
-ament_target_dependencies(excavator_ik rclcpp urdf)
-
-target_include_directories(excavator_ik PUBLIC include)
-target_include_directories(excavator_pose_converter PUBLIC include)
-
 set(COMMON_DEPENDENCIES
   "rclcpp"
   "rclcpp_action"
@@ -103,8 +90,6 @@ set(COMMON_LINK_DIRS
 set(COMMON_LINK_LIBS
   mongocxx
   bsoncxx
-  excavator_ik
-  excavator_pose_converter
 )
 
 foreach(TARGET ${EXCAVATOR_TARGETS})
@@ -133,11 +118,6 @@ foreach(TARGET ${BULLDOZER_TARGETS})
   target_link_libraries(${TARGET} ${COMMON_LINK_LIBS})
   install(TARGETS ${TARGET} DESTINATION lib/${PROJECT_NAME})
 endforeach()
-
-install(TARGETS excavator_ik excavator_pose_converter
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin)
 
 install(DIRECTORY
   launch
