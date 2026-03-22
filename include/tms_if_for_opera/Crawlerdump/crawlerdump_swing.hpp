@@ -31,24 +31,24 @@
 #include "std_msgs/msg/float64.hpp"
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
-#include "tms_msg_rp/action/tms_rp_crawlerdump_swing_angle.hpp"
+#include "tms_msg_rp/action/tms_rp_crawler_dump_swing_angle.hpp"
 #include "com3_msgs/action/set_swing_angle.hpp"
 
 
 class CrawlerdumpSwing : public rclcpp::Node
 {
 public:
-    using GoalHandle = rclcpp_action::ServerGoalHandle<tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle>;
+    using GoalHandle = rclcpp_action::ServerGoalHandle<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle>;
     using SetSwingAngle = com3_msgs::action::SetSwingAngle;
     using GoalHandleCrawlerdumpSwing = rclcpp_action::ClientGoalHandle<SetSwingAngle>;
     CrawlerdumpSwing();
 
 
 private:
-    rclcpp_action::Server<tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle>::SharedPtr action_server_;
+    rclcpp_action::Server<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle>::SharedPtr action_server_;
     std::map<std::pair<std::string, std::string>, double> param_from_db_;
     rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID& uuid,
-                                            std::shared_ptr<const tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle::Goal> goal);
+                                            std::shared_ptr<const tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle::Goal> goal);
     rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandle> goal_handle);
     void handle_accepted(const std::shared_ptr<GoalHandle> goal_handle);
     void execute(const std::shared_ptr<GoalHandle> goal_handle);

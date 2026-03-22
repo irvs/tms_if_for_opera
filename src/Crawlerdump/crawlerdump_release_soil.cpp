@@ -21,7 +21,7 @@ using std::placeholders::_2;
 
 CrawlerdumpReleaseSoil::CrawlerdumpReleaseSoil() : rclcpp::Node("tms_if_crawlerdump_release_soil_node")
 {
-    this->action_server_ = rclcpp_action::create_server<tms_msg_rp::action::TmsRpCrawlerdumpDumpAngle>(
+    this->action_server_ = rclcpp_action::create_server<tms_msg_rp::action::TmsRpCrawlerDumpDumpAngle>(
         this, "tms_rp_set_dump_angle",
         std::bind(&CrawlerdumpReleaseSoil::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
         std::bind(&CrawlerdumpReleaseSoil::handle_cancel, this, std::placeholders::_1),
@@ -32,7 +32,7 @@ CrawlerdumpReleaseSoil::CrawlerdumpReleaseSoil() : rclcpp::Node("tms_if_crawlerd
 }
 
 rclcpp_action::GoalResponse CrawlerdumpReleaseSoil::handle_goal(
-    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const tms_msg_rp::action::TmsRpCrawlerdumpDumpAngle::Goal> goal)
+    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const tms_msg_rp::action::TmsRpCrawlerDumpDumpAngle::Goal> goal)
 {
     RCLCPP_INFO(this->get_logger(), "Received goal request");
     return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
@@ -60,7 +60,7 @@ void CrawlerdumpReleaseSoil::execute(const std::shared_ptr<GoalHandle> goal_hand
 {
     RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_crawlerdump_release_soil) is executing...");
     current_goal_handle_ = goal_handle;
-    auto result = std::make_shared<tms_msg_rp::action::TmsRpCrawlerdumpDumpAngle::Result>();
+    auto result = std::make_shared<tms_msg_rp::action::TmsRpCrawlerDumpDumpAngle::Result>();
     auto handle_error = [&](const std::string& message) {
         if (goal_handle->is_active())
         {
@@ -121,7 +121,7 @@ void CrawlerdumpReleaseSoil::result_callback(const std::shared_ptr<GoalHandle> g
     return;
   }
 
-  auto result_to_st_node = std::make_shared<tms_msg_rp::action::TmsRpCrawlerdumpDumpAngle::Result>();
+  auto result_to_st_node = std::make_shared<tms_msg_rp::action::TmsRpCrawlerDumpDumpAngle::Result>();
   switch (result.code)
   {
     case rclcpp_action::ResultCode::SUCCEEDED:

@@ -21,7 +21,7 @@ using std::placeholders::_2;
 
 CrawlerdumpSwing::CrawlerdumpSwing() : rclcpp::Node("tms_if_crawlerdump_swing_node")
 {
-    this->action_server_ = rclcpp_action::create_server<tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle>(
+    this->action_server_ = rclcpp_action::create_server<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle>(
         this, "tms_rp_set_swing_angle",
         std::bind(&CrawlerdumpSwing::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
         std::bind(&CrawlerdumpSwing::handle_cancel, this, std::placeholders::_1),
@@ -32,7 +32,7 @@ CrawlerdumpSwing::CrawlerdumpSwing() : rclcpp::Node("tms_if_crawlerdump_swing_no
 }
 
 rclcpp_action::GoalResponse CrawlerdumpSwing::handle_goal(
-    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle::Goal> goal)
+    const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle::Goal> goal)
 {
     RCLCPP_INFO(this->get_logger(), "Received goal request");
     return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
@@ -60,7 +60,7 @@ void CrawlerdumpSwing::execute(const std::shared_ptr<GoalHandle> goal_handle)
 {
     RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_crawlerdump_swing_node) is executing...");
     current_goal_handle_ = goal_handle;
-    auto result = std::make_shared<tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle::Result>();
+    auto result = std::make_shared<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle::Result>();
     auto handle_error = [&](const std::string& message) {
         if (goal_handle->is_active())
         {
@@ -121,7 +121,7 @@ void CrawlerdumpSwing::result_callback(const std::shared_ptr<GoalHandle> goal_ha
     return;
   }
 
-  auto result_to_st_node = std::make_shared<tms_msg_rp::action::TmsRpCrawlerdumpSwingAngle::Result>();
+  auto result_to_st_node = std::make_shared<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle::Result>();
   switch (result.code)
   {
     case rclcpp_action::ResultCode::SUCCEEDED:
