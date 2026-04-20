@@ -189,6 +189,38 @@ def generate_launch_description():
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
 
+    bulldozer_blade_node_d37pxi_24 = Node(
+        package='tms_if_for_opera',
+        executable='bulldozer_blade_control',
+        namespace='d37pxi_24',
+        parameters=[
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}
+        ])
+
+    bulldozer_navigate_through_poses_node_d37pxi_24 = Node(
+        package='tms_if_for_opera',
+        executable='bulldozer_navigate_through_poses',
+        namespace='d37pxi_24',
+        parameters=[
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}
+        ])
+    
+    bulldozer_navigate_anywhere_node_d37pxi_24 = Node(
+        package='tms_if_for_opera',
+        executable='bulldozer_navigate_anywhere',
+        namespace='d37pxi_24',
+        parameters=[
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}
+        ])
+    
+    bulldozer_follow_waypoints_node_d37pxi_24 = Node(
+        package='tms_if_for_opera',
+        executable='bulldozer_follow_waypoints',
+        namespace='d37pxi_24',
+        parameters=[
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}
+        ])
+
     # Build the launch description
     ld = LaunchDescription([
         declare_use_sim_time_arg,
@@ -216,6 +248,11 @@ def generate_launch_description():
         crawlerdump_swing_align_to_heading_node_mst2200vd,
         crawlerdump_release_soil_node_mst2200vd,
         crawlerdump_swing_node_mst2200vd,
+
+        bulldozer_blade_node_d37pxi_24,
+        bulldozer_navigate_through_poses_node_d37pxi_24,
+        bulldozer_navigate_anywhere_node_d37pxi_24,
+        bulldozer_follow_waypoints_node_d37pxi_24,
         
     ])
 
