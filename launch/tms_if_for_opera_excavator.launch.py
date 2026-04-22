@@ -97,37 +97,6 @@ def generate_launch_description():
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
 
-    bulldozer_blade_node_d37pxi_24 = Node(
-        package='tms_if_for_opera',
-        executable='bulldozer_blade_control',
-        namespace='d37pxi_24',
-        parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-
-    bulldozer_navigate_through_poses_node_d37pxi_24 = Node(
-        package='tms_if_for_opera',
-        executable='bulldozer_navigate_through_poses',
-        namespace='d37pxi_24',
-        parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-    
-    bulldozer_navigate_anywhere_node_d37pxi_24 = Node(
-        package='tms_if_for_opera',
-        executable='bulldozer_navigate_anywhere',
-        namespace='d37pxi_24',
-        parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
-    
-    bulldozer_follow_waypoints_node_d37pxi_24 = Node(
-        package='tms_if_for_opera',
-        executable='bulldozer_follow_waypoints',
-        namespace='d37pxi_24',
-        parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
 
     # Build the launch description
     ld = LaunchDescription([
