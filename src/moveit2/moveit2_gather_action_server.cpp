@@ -1,4 +1,4 @@
-#include "tms_if_for_opera/moveit2/moveit2_change_pose_action_server.hpp"
+#include "tms_if_for_opera/moveit2/moveit2_gather_action_server.hpp"
 
 // #include <moveit_msgs/msg/constraints.hpp>
 // #include <moveit_msgs/msg/orientation_constraint.hpp>
@@ -11,11 +11,12 @@
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <fstream>
 #include <sstream>
+using std::cout;
 
 using namespace tms_if_for_opera;
 
-Moveit2ChangePoseActionServer::Moveit2ChangePoseActionServer(const rclcpp::NodeOptions& options)
-  : Node("tms_if_for_opera_moveit2_change_pose_plan", options)
+Moveit2GatherActionServer::Moveit2GatherActionServer(const rclcpp::NodeOptions& options)
+  : Node("tms_if_for_opera_moveit2_gather", options)
 {
   this->declare_parameter<std::string>("robot_description", "");
   this->get_parameter("robot_description", robot_description_);
@@ -26,7 +27,6 @@ Moveit2ChangePoseActionServer::Moveit2ChangePoseActionServer(const rclcpp::NodeO
   this->get_parameter("planning_group", planning_group_);
   RCLCPP_INFO(this->get_logger(), "Planning group: %s", planning_group_.c_str());
 
-  // ノードのnamespaceを取得
   std::string namespace_param = this->get_namespace();
   RCLCPP_INFO(this->get_logger(), "Node namespace: %s", namespace_param.c_str());
 
@@ -58,9 +58,9 @@ Moveit2ChangePoseActionServer::Moveit2ChangePoseActionServer(const rclcpp::NodeO
   using namespace std::placeholders;
 
   action_server_ = rclcpp_action::create_server<ExcavatorChangePose>(
-      this, "tms_rp_change_pose_plan", std::bind(&Moveit2ChangePoseActionServer::handle_goal, this, _1, _2),
-      std::bind(&Moveit2ChangePoseActionServer::handle_cancel, this, _1),
-      std::bind(&Moveit2ChangePoseActionServer::handle_accepted, this, _1));
+      this, "tms_rp_gather", std::bind(&Moveit2GatherActionServer::handle_goal, this, _1, _2),
+      std::bind(&Moveit2GatherActionServer::handle_cancel, this, _1),
+      std::bind(&Moveit2GatherActionServer::handle_accepted, this, _1));
   /****/
 
   /* Setup movegroup interface */
@@ -79,7 +79,7 @@ Moveit2ChangePoseActionServer::Moveit2ChangePoseActionServer(const rclcpp::NodeO
   move_group_->setMaxVelocityScalingFactor(1.0);
   move_group_->setMaxAccelerationScalingFactor(1.0);
   move_group_->setNumPlanningAttempts(100);
-  move_group_->setPlanningTime(60.0);
+  move_group_->setPlanningTime(10.0);
   move_group_->setPlannerId("RRTConnectkConfigDefault");
 
   // Get robot info
@@ -95,7 +95,7 @@ Moveit2ChangePoseActionServer::Moveit2ChangePoseActionServer(const rclcpp::NodeO
   this->emg_stop_publisher_ = this->create_publisher<std_msgs::msg::Bool>("emg_stop", 10);
 }
 
-rclcpp_action::GoalResponse Moveit2ChangePoseActionServer::handle_goal(const rclcpp_action::GoalUUID& uuid,
+rclcpp_action::GoalResponse Moveit2GatherActionServer::handle_goal(const rclcpp_action::GoalUUID& uuid,
                                                                      std::shared_ptr<const ExcavatorChangePose::Goal> goal)
 {
   RCLCPP_INFO(this->get_logger(), "Received goal request");
@@ -104,9 +104,9 @@ rclcpp_action::GoalResponse Moveit2ChangePoseActionServer::handle_goal(const rcl
 }
 
 rclcpp_action::CancelResponse
-Moveit2ChangePoseActionServer::handle_cancel(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
+Moveit2GatherActionServer::handle_cancel(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
 {
-  RCLCPP_INFO(this->get_logger(), "Publishing EMG stop signal to Moveit2.");
+  RCLCPP_INFO(this->get_logger(), "Publishing EMG stop signal to ZX200.");
 
   // 実機用非常停止
   std_msgs::msg::Bool msg;
@@ -121,19 +121,22 @@ Moveit2ChangePoseActionServer::handle_cancel(const std::shared_ptr<GoalHandleExc
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-void Moveit2ChangePoseActionServer::handle_accepted(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
+void Moveit2GatherActionServer::handle_accepted(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
 {
   RCLCPP_INFO(this->get_logger(), "handle_accepted() start.");
   using namespace std::placeholders;
   // this needs to return quickly to avoid blocking the executor, so spin up a new thread
-  std::thread{ std::bind(&Moveit2ChangePoseActionServer::execute, this, _1), goal_handle }.detach();
+  std::thread{ std::bind(&Moveit2GatherActionServer::execute, this, _1), goal_handle }.detach();
 }
 
-void Moveit2ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
+void Moveit2GatherActionServer::execute(const std::shared_ptr<GoalHandleExcavatorChangePose> goal_handle)
 {
   // Apply collision object
   apply_collision_objects_from_db(collision_object_record_name_);
   apply_collision_objects_mesh_from_db(collision_object_dump_record_name_);
+
+  // 結果を格納する構造体
+  Pose result_pose;
 
   // Get link info
   link_names_ = move_group_->getLinkNames();
@@ -160,6 +163,7 @@ void Moveit2ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleExca
       planning_scene_msg.link_padding.push_back(padding_msg);
   }
   planning_scene_interface_.applyPlanningScene(planning_scene_msg);
+  RCLCPP_INFO(this->get_logger(), "Planning scene applied with link padding.");
 
   // Clear constraints
   // move_group_->clearPathConstraints();
@@ -187,6 +191,7 @@ void Moveit2ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleExca
   if (goal->trajectory.points.size() > 0 && goal->pose_sequence.size() == 0 &&
       goal->position_with_angle_sequence.size() == 0)
   {
+    RCLCPP_INFO(this->get_logger(), "Entered trajectory-based planning block.");
     for (const auto& point : goal->trajectory.points)
     {
       std::map<std::string, double> target_joint_values;
@@ -202,6 +207,12 @@ void Moveit2ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleExca
         }
       }
       move_group_->setJointValueTarget(target_joint_values);
+
+      // target_joint_valuesの中身を表示
+      // for (size_t i = 0; i < target_joint_values.size() && i < joint_names_.size(); ++i)
+      // {
+      //   RCLCPP_INFO(this->get_logger(), "Joint: %s, Value: %f", joint_names_[i].c_str(), target_joint_values[i]);
+      // }
 
       feedback->state = "PLANNING";
       goal_handle->publish_feedback(feedback);
@@ -226,6 +237,7 @@ void Moveit2ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleExca
   else if (goal->pose_sequence.size() > 0 && goal->trajectory.points.size() == 0 &&
            goal->position_with_angle_sequence.size() == 0)
   {
+    RCLCPP_INFO(this->get_logger(), "Entered pose-sequence-based planning block.");
     for (const auto& pose : goal->pose_sequence)
     {
       move_group_->setPoseTarget(pose);
@@ -253,88 +265,107 @@ void Moveit2ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleExca
   else if (goal->position_with_angle_sequence.size() > 0 && goal->trajectory.points.size() == 0 &&
            goal->pose_sequence.size() == 0)
   {
+    RCLCPP_INFO(this->get_logger(), "Entered position-with-angle-sequence-based planning block.");
+        // デバッグ情報を追加
+    RCLCPP_INFO(this->get_logger(), "DEBUG: position_with_angle_sequence.size() = %zu", goal->position_with_angle_sequence.size());
+    std::vector<geometry_msgs::msg::Pose> waypoints;
     for (const auto& point : goal->position_with_angle_sequence)
     {
-      // Get end effector pose to use pose/position constraint
-      std::vector<double> target_joint_values(joint_names_.size(), 0.0);
-      if (excavator_ik_.inverseKinematics4Dof(point.position.x, point.position.y, point.position.z, point.theta_w,
-                                              target_joint_values) == -1)
-      {
-        RCLCPP_INFO(this->get_logger(), "Failed to calculate inverse kinematics");
-        feedback->state = "ABORTED";
-        result->error_code.val = 9999;
-        break;
-      }
+      // 入力パラメータを取得
+      double x = point.position.x;
+      double y = point.position.y;
+      double z = point.position.z;
+      double theta_w = point.theta_w;
 
-      // // Set pose constraint
-      // // Check if constraint exists
-      // if (goal->constraints.joint_constraints.empty() && goal->constraints.position_constraints.empty() &&
-      //     goal->constraints.orientation_constraints.empty() && goal->constraints.visibility_constraints.empty())
-      // {
-      //   RCLCPP_INFO(this->get_logger(), "Constraints do not exist");
-      // }
-      // else
-      // {
-      //   RCLCPP_INFO(this->get_logger(), "Constraints exist");
+      RCLCPP_INFO(this->get_logger(), "Input: x=%.6f, y=%.6f, z=%.6f, theta_w=%.6f", x, y, z, theta_w);
 
-      //   // TODO: Add error handling
-      //   //       - Use constraint in joint space
-      //   //       - Constraint is not for end effector
-      //   if (goal->constraints.orientation_constraints.size() > 0)
-      //   {
-      //     RCLCPP_INFO(this->get_logger(), "Orientation constraint exists");
-      //     auto current_pose = move_group_->getCurrentPose();
-      //     moveit_msgs::msg::Constraints pose_constraints;
-      //     moveit_msgs::msg::OrientationConstraint ocm;
-      //     ocm.header.frame_id = move_group_->getPoseReferenceFrame();  // Replace with your base link name
-      //     ocm.link_name = move_group_->getEndEffectorLink();
-      //     // Specify the desired orientation
-      //     ocm.orientation = current_pose.pose.orientation;
-      //     ocm.absolute_x_axis_tolerance = goal->constraints.orientation_constraints[0].absolute_x_axis_tolerance;
-      //     ocm.absolute_y_axis_tolerance = goal->constraints.orientation_constraints[0].absolute_y_axis_tolerance;
-      //     ocm.absolute_z_axis_tolerance = goal->constraints.orientation_constraints[0].absolute_z_axis_tolerance;
-      //     ocm.weight = goal->constraints.orientation_constraints[0].weight;
-      //     pose_constraints.orientation_constraints.emplace_back(ocm);
-      //     move_group_->setPathConstraints(pose_constraints);
-      //   }
-      // }
+      Pose target_pose;
+      pose_converter_.convertToXYZQuaternion(x, y, z, theta_w, target_pose);
+      geometry_msgs::msg::Pose moveit_pose;
+      moveit_pose.position.x = target_pose.x;
+      moveit_pose.position.y = target_pose.y;
+      moveit_pose.position.z = target_pose.z;
+      moveit_pose.orientation.x = target_pose.qx;
+      moveit_pose.orientation.y = target_pose.qy;
+      moveit_pose.orientation.z = target_pose.qz;
+      moveit_pose.orientation.w = target_pose.qw;
+      waypoints.push_back(moveit_pose);
+    }
 
-      // Set target pose
-      // robot_state_->setJointGroupPositions(move_group_->getName(), target_joint_values);
-      // robot_state_->update();
-      // Eigen::Isometry3d end_effector_state = robot_state_->getGlobalLinkTransform(move_group_->getEndEffectorLink());
-      // move_group_->setPoseTarget(end_effector_state);
+    move_group_->setGoalPositionTolerance(0.1);
+    move_group_->setGoalOrientationTolerance(0.1);
+    
+    // 中間点への移動を実行
+    move_group_->setPoseTarget(waypoints[0]);
+    
+    feedback->state = "PLANNING";
+    goal_handle->publish_feedback(feedback);
+  
+    if (move_group_->move() != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+    {
+      RCLCPP_ERROR(this->get_logger(), "Failed to move to intermediate point");
+      feedback->state = "ABORTED";
+      goal_handle->publish_feedback(feedback);
+      result->error_code.val = 9999;
+      goto finish;
+    }
+    
+    RCLCPP_INFO(this->get_logger(), "Successfully moved to intermediate point");
 
-      move_group_->setJointValueTarget(target_joint_values);
-
+    // CartesianPathで経路計画
+    moveit_msgs::msg::RobotTrajectory trajectory;
+    const double eef_step = 0.01;  // エンドエフェクタのステップサイズ（1cm）
+    const double jump_threshold = 0.0;  // ジャンプ閾値（0で無効）
+  
+    RCLCPP_INFO(this->get_logger(), "Computing Cartesian path through waypoints...");
+    double fraction = move_group_->computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
+    
+    if (fraction >= 0.80)  // 80%以上の経路が計算できた場合
+    {
+      RCLCPP_INFO(this->get_logger(), "Cartesian path computed successfully (%.2f%% achieved)", fraction * 100.0);
+      
+      // 軌道を実行
+      moveit::planning_interface::MoveGroupInterface::Plan cartesian_plan;
+      cartesian_plan.trajectory_ = trajectory;
+      
       feedback->state = "PLANNING";
       goal_handle->publish_feedback(feedback);
-      result->error_code.val = 1;
-
-      // if (move_group_->move() == moveit::planning_interface::MoveItErrorCode::SUCCESS)
-      // {
-      //   feedback->state = "SUCCEEDED";
-      //   goal_handle->publish_feedback(feedback);
-      //   result->error_code.val = 1;
-      //   // goal_handle->succeed(result);
-      // }
-      // else
-      // {  // Failed
-      //   feedback->state = "ABORTED";
-      //   goal_handle->publish_feedback(feedback);
-      //   result->error_code.val = 9999;
-
-      //   break;
-      // }
+      
+      if (move_group_->execute(cartesian_plan) == moveit::core::MoveItErrorCode::SUCCESS)
+      {
+        RCLCPP_INFO(this->get_logger(), "Cartesian path execution SUCCEEDED");
+        feedback->state = "SUCCEEDED";
+        goal_handle->publish_feedback(feedback);
+        result->error_code.val = 1;
+      }
+      else
+      {
+        RCLCPP_ERROR(this->get_logger(), "Cartesian path execution FAILED");
+        feedback->state = "ABORTED";
+        goal_handle->publish_feedback(feedback);
+        result->error_code.val = 9999;
+        // break;
+      }
     }
+    else
+    {
+      RCLCPP_ERROR(this->get_logger(), "Cartesian path planning FAILED - Only %.2f%% of path computed", fraction * 100.0);
+      feedback->state = "ABORTED";
+      goal_handle->publish_feedback(feedback);
+      result->error_code.val = 9999;
+      // break;
+    }
+    
   }
   else
   {
-    RCLCPP_INFO(this->get_logger(), "No or too much input.");
+    RCLCPP_INFO(this->get_logger(), "Entered invalid input block.");
     feedback->state = "ABORTED";
     goal_handle->publish_feedback(feedback);
     result->error_code.val = 9999;
   }
+
+finish:
 
   // If execution was successful, set the result of the action and mark it as succeeded.
   if (result->error_code.val == 1)
@@ -349,7 +380,7 @@ void Moveit2ChangePoseActionServer::execute(const std::shared_ptr<GoalHandleExca
   }
 }
 
-void Moveit2ChangePoseActionServer::apply_collision_objects_from_db(const std::string& record_name)
+void Moveit2GatherActionServer::apply_collision_objects_from_db(const std::string& record_name)
 {
   // Load collision objects from DB
   // RCLCPP_INFO(this->get_logger(), "Loading collision objects from DB");
@@ -428,7 +459,7 @@ void Moveit2ChangePoseActionServer::apply_collision_objects_from_db(const std::s
   }
 }
 
-void Moveit2ChangePoseActionServer::apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names)
+void Moveit2GatherActionServer::apply_collision_objects_mesh_from_db(const std::vector<std::string>& record_names)
 {
   for (const auto& record_name : record_names)
   {
@@ -497,7 +528,7 @@ void Moveit2ChangePoseActionServer::apply_collision_objects_mesh_from_db(const s
   }
 }
 
-double Moveit2ChangePoseActionServer::getDoubleValue(const bsoncxx::document::element& element)
+double Moveit2GatherActionServer::getDoubleValue(const bsoncxx::document::element& element)
 {
   if (element.type() == bsoncxx::type::k_double)
   {
@@ -516,7 +547,7 @@ double Moveit2ChangePoseActionServer::getDoubleValue(const bsoncxx::document::el
 int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<Moveit2ChangePoseActionServer>());
+  rclcpp::spin(std::make_shared<Moveit2GatherActionServer>());
   rclcpp::shutdown();
   return 0;
 }

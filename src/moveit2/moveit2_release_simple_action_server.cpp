@@ -57,7 +57,7 @@ Moveit2ReleaseSimpleActionServer::Moveit2ReleaseSimpleActionServer(const rclcpp:
   using namespace std::placeholders;
 
   action_server_ = rclcpp_action::create_server<ExcavatorReleaseSimple>(
-      this, "tms_rp_excavator_release_simple", std::bind(&Moveit2ReleaseSimpleActionServer::handle_goal, this, _1, _2),
+      this, "tms_rp_release_simple", std::bind(&Moveit2ReleaseSimpleActionServer::handle_goal, this, _1, _2),
       std::bind(&Moveit2ReleaseSimpleActionServer::handle_cancel, this, _1),
       std::bind(&Moveit2ReleaseSimpleActionServer::handle_accepted, this, _1));
   /****/
