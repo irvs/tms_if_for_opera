@@ -158,6 +158,39 @@ def generate_launch_description():
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
     
+    navigation2_navigate_through_poses_node_ic120 = Node(
+        package='tms_if_for_opera',
+        executable='navigation2_navigate_through_poses',
+        namespace='ic120',
+        parameters=[
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}
+        ])
+    
+    navigation2_navigate_anywhere_node_ic120 = Node(
+        package='tms_if_for_opera',
+        executable='navigation2_navigate_anywhere',
+        namespace='ic120',
+        parameters=[
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}
+        ])
+    
+    navigation2_follow_waypoints_node_ic120 = Node(
+        package='tms_if_for_opera',
+        executable='navigation2_follow_waypoints',
+        namespace='ic120',
+        parameters=[
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}
+        ])
+    
+    crawlerdump_release_soil_node_ic120 = Node(
+        package='tms_if_for_opera',
+        executable='crawlerdump_release_soil',
+        namespace='ic120',
+        parameters=[
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}
+        ])
+
+    
     navigation2_navigate_through_poses_node_mst110cr_2 = Node(
         package='tms_if_for_opera',
         executable='navigation2_navigate_through_poses',
@@ -274,6 +307,13 @@ def generate_launch_description():
         navigation2_navigate_through_poses_node_zx200,
         navigation2_navigate_anywhere_node_zx200,
         navigation2_follow_waypoints_node_zx200,
+
+
+        navigation2_navigate_through_poses_node_ic120,
+        navigation2_navigate_anywhere_node_ic120,
+        navigation2_follow_waypoints_node_ic120,
+        crawlerdump_release_soil_node_ic120,
+
 
         navigation2_navigate_through_poses_node_mst110cr_2,
         navigation2_navigate_anywhere_node_mst110cr_2,
