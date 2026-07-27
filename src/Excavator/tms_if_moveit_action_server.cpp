@@ -29,6 +29,8 @@
 #include "tms_msg_rp/srv/tms_rp_excavator_param_set.hpp"
 #include <unordered_map>
 
+#include <tf2_eigen/tf2_eigen.hpp>
+
 using TmsRpExcavator = tms_msg_rp::action::TmsRpExcavator;
 using GoalHandleTms = rclcpp_action::ServerGoalHandle<TmsRpExcavator>;
 using TmsRpExcavatorParamGet = tms_msg_rp::srv::TmsRpExcavatorParamGet;
@@ -371,6 +373,90 @@ private:
 
       // Store plan in result
       result->plan = plan.trajectory_;
+      
+      publish_fb("plan_complete", 0.95f);
+      finish(true, moveit_msgs::msg::MoveItErrorCodes::SUCCESS, "Planned successfully.");
+      return;
+    }
+
+    // ---- CMD_PLAN_CARTESIAN_PATH ----
+    if (goal->command == TmsRpExcavator::Goal::CMD_PLAN_CARTESIAN_PATH)
+    {
+      publish_fb("setting_cartesian_path", 0.25f);
+
+      // Set start state from previous trajectory if provided
+      if (const auto* prev = pickPrevTrajectory(goal->previous_pose)) {
+        if (!setStartStateFromPrevRobotTrajectory(*prev, *move_group_, planning_group_, get_logger())) {
+          finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE, "Failed to set start state from previous trajectory.");
+          return;
+        }
+      } else {
+        move_group_->setStartStateToCurrentState();
+      }
+
+      move_group_->setPoseTarget(goal->pose);
+
+      if (cancel_if_needed()) return;
+
+      publish_fb("planning", 0.50f);
+
+      std::vector<geometry_msgs::msg::Pose> waypoints;
+      geometry_msgs::msg::Pose start_pose;
+
+      //開始位置を取得
+      auto state = move_group_->getCurrentState();
+      
+      if (!goal->previous_pose.empty()){
+        const auto& traj = goal->previous_pose.back().joint_trajectory;
+        const auto& last_pt = traj.points.back();
+        const auto* jmg = state->getJointModelGroup(planning_group_);
+
+        std::unordered_map<std::string,double> joint_map;
+
+        for(size_t i=0;i<traj.joint_names.size();++i){
+          joint_map[traj.joint_names[i]] = last_pt.positions[i];
+        }
+
+        std::vector<double> group_positions;
+
+        for(const auto& name : jmg->getActiveJointModelNames()){
+          group_positions.push_back(joint_map.at(name));
+        }
+
+        state->setJointGroupPositions(jmg, group_positions);
+        state->update();
+      }
+
+      const auto& tf = state->getGlobalLinkTransform(move_group_->getEndEffectorLink());
+
+      tf2::convert(tf,start_pose);
+      
+
+      //waypointを設定
+      waypoints.push_back(start_pose);
+      waypoints.push_back(goal->pose);
+
+      moveit_msgs::msg::RobotTrajectory trajectory;
+
+      //経路を作成
+      double fraction =move_group_->computeCartesianPath(waypoints, 0.01, 0.0, trajectory);
+      
+      if (fraction < 0.95){
+      result->success = false;
+      return;
+      }
+
+      //速度、加速度の情報を追加
+      // robot_trajectory::RobotTrajectory rt(move_group_->getRobotModel(), planning_group_);
+      // rt.setRobotTrajectoryMsg(*state, trajectory);
+
+      // trajectory_processing::TimeOptimalTrajectoryGeneration totg;
+      // totg.computeTimeStamps(rt, current_max_velocity_scaling_factor_, current_max_acceleration_scaling_factor_);
+
+      // rt.getRobotTrajectoryMsg(trajectory);
+
+      // Store plan in result
+      result->plan = trajectory;
       
       publish_fb("plan_complete", 0.95f);
       finish(true, moveit_msgs::msg::MoveItErrorCodes::SUCCESS, "Planned successfully.");
