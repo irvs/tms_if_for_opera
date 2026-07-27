@@ -20,13 +20,24 @@ def load_yaml(package_name, file_path):
     except EnvironmentError:
         return None
 
+def load_file(package_name, file_path):
+    package_path = get_package_share_directory(package_name)
+    absolute_file_path = os.path.join(package_path, file_path)
+    
+    try:
+        with open(absolute_file_path, 'r') as file:
+            return file.read()
+    except EnvironmentError:
+        return None
+
 def generate_launch_description():
     # Get the package directory
     zx200_description_dir = get_package_share_directory('zx200_description')
     zx200_moveit_config_dir = get_package_share_directory('zx200_moveit_config')
 
-    # Load kinematics.yaml
-    kinematics_yaml = load_yaml('zx200_moveit_config', 'config/kinematics.yaml')
+    # Load kinematics.yaml and SRDF
+    kinematics_yaml = load_yaml('zx200_moveit_config', 'config/kinematics.yaml') or {}
+    robot_description_semantic_content = load_file('zx200_moveit_config', 'config/zx200.srdf') or ''
     
     # Declare the launch arguments
     declare_use_sim_time_arg = DeclareLaunchArgument(
@@ -67,6 +78,12 @@ def generate_launch_description():
         package='tms_if_for_opera',
         executable='tms_if_moveit_action_server',
         namespace='zx200',
+        parameters=[
+            {'robot_description': robot_description_content},
+            {'robot_description_semantic': robot_description_semantic_content},
+            {'robot_description_kinematics': kinematics_yaml},
+            {'planning_group': LaunchConfiguration('planning_group')},
+        ],
     )
     
     excavator_navigate_through_poses_node_zx200 = Node(

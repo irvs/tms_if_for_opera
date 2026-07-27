@@ -19,6 +19,7 @@
 #include "moveit/move_group_interface/move_group_interface.h"
 #include "moveit/planning_scene_interface/planning_scene_interface.h"
 #include <moveit_msgs/srv/apply_planning_scene.hpp>
+#include "moveit/planning_scene_monitor/planning_scene_monitor.h"
 #include "moveit/robot_model_loader/robot_model_loader.h"
 #include "moveit/robot_model/robot_model.h"
 #include "moveit/robot_state/robot_state.h"
@@ -43,7 +44,9 @@ public:
   : Node("tms_if_moveit_action_server", options)
   {
     // パラメータの取得
-    this->declare_parameter<std::string>("planning_group", "manipulator");
+    if (!this->has_parameter("planning_group")) {
+      this->declare_parameter<std::string>("planning_group", "manipulator");
+    }
     this->get_parameter("planning_group", planning_group_);
     RCLCPP_INFO(this->get_logger(), "Planning group: %s", planning_group_.c_str());
 
@@ -82,6 +85,19 @@ public:
         planning_group_, "robot_description", node_namespace);
     move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(
         move_group_node_, *move_group_options_);
+
+    try {
+      planning_scene_monitor_ = std::make_shared<planning_scene_monitor::PlanningSceneMonitor>(
+          move_group_node_, "robot_description");
+      // planning_scene_monitor_->startStateMonitor();
+      planning_scene_monitor_->startSceneMonitor();
+      if (!planning_scene_monitor_->requestPlanningSceneState()) {
+        RCLCPP_INFO(get_logger(), "Failed to request planning scene state from service");
+      }
+    } catch (const std::exception& e) {
+      RCLCPP_INFO(get_logger(), "PlanningSceneMonitor initialization failed: %s", e.what());
+      planning_scene_monitor_.reset();
+    }
     
     RCLCPP_INFO(get_logger(), "MoveGroupInterface created successfully");
     
@@ -133,6 +149,7 @@ private:
   std::string planning_group_;
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface::Options> move_group_options_;
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
+  planning_scene_monitor::PlanningSceneMonitorPtr planning_scene_monitor_;
 
   // MoveGroupの設定値を保存（Getterがないため）
   double current_max_velocity_scaling_factor_{1.0};
@@ -300,6 +317,91 @@ private:
       
       publish_fb("plan_complete", 0.95f);
       finish(true, moveit_msgs::msg::MoveItErrorCodes::SUCCESS, "Planned successfully.");
+      return;
+    }
+
+    // ---- CMD_CHECK_POSE_COLLISION ----
+    if (goal->command == TmsRpExcavator::Goal::CMD_CHECK_POSE_COLLISION)
+    {
+      publish_fb("checking_pose_collision", 0.25f);
+
+      if (!planning_scene_monitor_) {
+        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
+               "PlanningSceneMonitor is not available.");
+        return;
+      }
+
+      auto current_state = move_group_->getCurrentState();
+      if (!current_state) {
+        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
+               "Failed to get current robot state.");
+        return;
+      }
+
+      moveit::core::RobotState test_state(*current_state);
+      test_state.update();
+
+      if (const auto* prev = pickPrevTrajectory(goal->previous_pose)) {
+        if (!setStateFromPrevRobotTrajectory(*prev, test_state, planning_group_, get_logger())) {
+          finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
+                 "Failed to set test state from previous trajectory.");
+          return;
+        }
+      }
+
+      const moveit::core::JointModelGroup* jmg = test_state.getJointModelGroup(planning_group_);
+      if (!jmg) {
+        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
+               "JointModelGroup not found for planning_group: " + planning_group_);
+        return;
+      }
+
+      const std::string default_ik_tip = move_group_->getEndEffectorLink();
+      const std::string fallback_ik_tip = "bucket_link";
+      std::string ik_tip = default_ik_tip;
+      bool ik_available = jmg->canSetStateFromIK(ik_tip);
+      if (!ik_available && ik_tip != fallback_ik_tip) {
+        RCLCPP_WARN(get_logger(), "IK solver not available for tip '%s'; trying fallback tip '%s'", ik_tip.c_str(), fallback_ik_tip.c_str());
+        if (jmg->canSetStateFromIK(fallback_ik_tip)) {
+          ik_tip = fallback_ik_tip;
+          ik_available = true;
+        }
+      }
+
+      if (!ik_available) {
+        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
+               "No IK solver instantiated for group '" + planning_group_ + "' tip '" + ik_tip + "'.");
+        return;
+      }
+
+      if (!test_state.setFromIK(jmg, goal->pose, ik_tip)) {
+        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
+               "IK failed for target pose using tip '" + ik_tip + "'.");
+        return;
+      }
+
+      test_state.update();
+      
+      if (cancel_if_needed()) return;
+
+      publish_fb("checking_collision", 0.50f);
+
+      planning_scene_monitor::LockedPlanningSceneRO locked_scene(planning_scene_monitor_);
+      if (!locked_scene) {
+        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
+               "Failed to access current planning scene.");
+        return;
+      }
+
+      if (locked_scene->isStateColliding(test_state, planning_group_, false)) {
+        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
+               "Target pose is colliding in current planning scene.");
+        return;
+      }
+
+      publish_fb("pose_check_complete", 0.95f);
+      finish(true, moveit_msgs::msg::MoveItErrorCodes::SUCCESS,
+             "Target pose is collision-free in current planning scene.");
       return;
     }
 
@@ -713,6 +815,58 @@ private:
     return &t;
   }
 
+  static bool setStateFromPrevRobotTrajectory(
+    const moveit_msgs::msg::RobotTrajectory& prev_traj,
+    moveit::core::RobotState& state,
+    const std::string& planning_group,
+    const rclcpp::Logger& logger)
+  {
+    const auto& jt = prev_traj.joint_trajectory;
+    if (jt.joint_names.empty() || jt.points.empty()) {
+      RCLCPP_WARN(logger, "prev RobotTrajectory is empty; fallback to current state.");
+      return false;
+    }
+
+    const auto& last_pt = jt.points.back();
+    if (last_pt.positions.size() != jt.joint_names.size()) {
+      RCLCPP_ERROR(logger,
+        "prev_traj last point mismatch: positions=%zu joint_names=%zu",
+        last_pt.positions.size(), jt.joint_names.size());
+      return false;
+    }
+
+    const auto* jmg = state.getJointModelGroup(planning_group);
+    if (!jmg) {
+      RCLCPP_ERROR(logger, "JointModelGroup not found: %s", planning_group.c_str());
+      return false;
+    }
+
+    std::unordered_map<std::string, double> name_to_pos;
+    name_to_pos.reserve(jt.joint_names.size());
+    for (size_t i = 0; i < jt.joint_names.size(); ++i) {
+      name_to_pos[jt.joint_names[i]] = last_pt.positions[i];
+    }
+
+    const auto& active = jmg->getActiveJointModelNames();
+    std::vector<double> group_positions;
+    group_positions.reserve(active.size());
+
+    for (const auto& jn : active) {
+      auto it = name_to_pos.find(jn);
+      if (it == name_to_pos.end()) {
+        RCLCPP_ERROR(logger,
+          "prev_traj does not contain required joint '%s' for group '%s'",
+          jn.c_str(), planning_group.c_str());
+        return false;
+      }
+      group_positions.push_back(it->second);
+    }
+
+    state.setJointGroupPositions(jmg, group_positions);
+    state.update();
+    return true;
+  }
+
   void handle_apply_planning_scene(
     const std::shared_ptr<moveit_msgs::srv::ApplyPlanningScene::Request> request,
     std::shared_ptr<moveit_msgs::srv::ApplyPlanningScene::Response> response)
@@ -741,7 +895,9 @@ int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
 
-  auto server = std::make_shared<TmsIfMoveItActionServer>();
+  rclcpp::NodeOptions options;
+  options.automatically_declare_parameters_from_overrides(true);
+  auto server = std::make_shared<TmsIfMoveItActionServer>(options);
 
   rclcpp::executors::MultiThreadedExecutor exec(rclcpp::ExecutorOptions(), 4);
   exec.add_node(server);
