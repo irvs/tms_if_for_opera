@@ -89,13 +89,18 @@ public:
     try {
       planning_scene_monitor_ = std::make_shared<planning_scene_monitor::PlanningSceneMonitor>(
           move_group_node_, "robot_description");
-      // planning_scene_monitor_->startStateMonitor();
+      planning_scene_monitor_->startStateMonitor("/zx200/joint_states", "/zx200/collision_object");
       planning_scene_monitor_->startSceneMonitor();
+      RCLCPP_INFO(get_logger(), "PlanningSceneMonitor started: state=true, scene=true");
+      
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
       if (!planning_scene_monitor_->requestPlanningSceneState()) {
-        RCLCPP_INFO(get_logger(), "Failed to request planning scene state from service");
+        RCLCPP_WARN(get_logger(), "Failed to request planning scene state from service; trying local copy");
+      } else {
+        RCLCPP_INFO(get_logger(), "Successfully requested planning scene state");
       }
     } catch (const std::exception& e) {
-      RCLCPP_INFO(get_logger(), "PlanningSceneMonitor initialization failed: %s", e.what());
+      RCLCPP_ERROR(get_logger(), "PlanningSceneMonitor initialization failed: %s", e.what());
       planning_scene_monitor_.reset();
     }
     
@@ -393,7 +398,24 @@ private:
         return;
       }
 
-      if (locked_scene->isStateColliding(test_state, planning_group_, false)) {
+      RCLCPP_INFO(get_logger(), "Checking collision for pose: [%.3f, %.3f, %.3f]",
+                   goal->pose.position.x, goal->pose.position.y, goal->pose.position.z);
+
+      collision_detection::CollisionRequest collision_request;
+      collision_request.group_name = planning_group_;
+      collision_request.contacts = true;
+      collision_request.max_contacts = 10;
+      collision_detection::CollisionResult collision_result;
+
+      locked_scene->checkCollision(collision_request, collision_result, test_state);
+
+      if (collision_result.collision) {
+        RCLCPP_WARN(get_logger(), "Target pose is colliding with obstacles (contacts count: %zu)",
+                    collision_result.contacts.size());
+        for (const auto& contact : collision_result.contacts) {
+          RCLCPP_WARN(get_logger(), "  Collision contact between '%s' and '%s'",
+                      contact.first.first.c_str(), contact.first.second.c_str());
+        }
         finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
                "Target pose is colliding in current planning scene.");
         return;
@@ -882,6 +904,15 @@ private:
     try {
       moveit::planning_interface::PlanningSceneInterface psi;
       psi.applyPlanningScene(request->scene);
+
+      if (planning_scene_monitor_) {
+        planning_scene_monitor::LockedPlanningSceneRW scene(planning_scene_monitor_);
+        if (scene) {
+          scene->usePlanningSceneMsg(request->scene);
+          RCLCPP_INFO(get_logger(), "Applied planning scene to local PlanningSceneMonitor");
+        }
+      }
+
       response->success = true;
       RCLCPP_INFO(get_logger(), "Applied planning scene successfully");
     } catch (const std::exception& e) {
