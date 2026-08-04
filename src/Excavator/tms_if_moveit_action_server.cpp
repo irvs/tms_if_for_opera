@@ -379,14 +379,6 @@ private:
         return;
       }
 
-      if (!test_state.setFromIK(jmg, goal->pose, ik_tip)) {
-        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
-               "IK failed for target pose using tip '" + ik_tip + "'.");
-        return;
-      }
-
-      test_state.update();
-      
       if (cancel_if_needed()) return;
 
       publish_fb("checking_collision", 0.50f);
@@ -401,23 +393,49 @@ private:
       RCLCPP_INFO(get_logger(), "Checking collision for pose: [%.3f, %.3f, %.3f]",
                    goal->pose.position.x, goal->pose.position.y, goal->pose.position.z);
 
-      collision_detection::CollisionRequest collision_request;
-      collision_request.group_name = planning_group_;
-      collision_request.contacts = true;
-      collision_request.max_contacts = 10;
-      collision_detection::CollisionResult collision_result;
+      const int max_attempts = 1; // 回数を増やしても結果があまり変わらないため1回のみ
+      bool collision_free_found = false;
 
-      locked_scene->checkCollision(collision_request, collision_result, test_state);
-
-      if (collision_result.collision) {
-        RCLCPP_WARN(get_logger(), "Target pose is colliding with obstacles (contacts count: %zu)",
-                    collision_result.contacts.size());
-        for (const auto& contact : collision_result.contacts) {
-          RCLCPP_WARN(get_logger(), "  Collision contact between '%s' and '%s'",
-                      contact.first.first.c_str(), contact.first.second.c_str());
+      // max_attempts回だけIKと障害物干渉チェックを繰り返す
+      for (int attempt = 1; attempt <= max_attempts; attempt++) {
+        if (const auto* prev = pickPrevTrajectory(goal->previous_pose)) {
+          setStateFromPrevRobotTrajectory(*prev, test_state, planning_group_, get_logger());
+        } else {
+          test_state = *current_state;
         }
+
+        if (!test_state.setFromIK(jmg, goal->pose, ik_tip)) {
+          RCLCPP_DEBUG(get_logger(), "IK failed on attempt %d/%d", attempt, max_attempts);
+          continue;
+        }
+        test_state.update();
+
+        collision_detection::CollisionRequest collision_request;
+        collision_request.group_name = planning_group_;
+        collision_request.contacts = true;
+        collision_request.max_contacts = 10;
+        collision_detection::CollisionResult collision_result;
+
+        locked_scene->checkCollision(collision_request, collision_result, test_state);
+
+        if (!collision_result.collision) {
+          collision_free_found = true;
+          RCLCPP_INFO(get_logger(), "Target pose is collision-free (passed on attempt %d/%d)",
+                      attempt, max_attempts);
+          break;
+        } else {
+          RCLCPP_WARN(get_logger(), "Target pose collision check attempt %d/%d failed (contacts: %zu)",
+                      attempt, max_attempts, collision_result.contacts.size());
+          for (const auto& contact : collision_result.contacts) {
+            RCLCPP_WARN(get_logger(), "  Attempt %d contact: '%s' and '%s'",
+                        attempt, contact.first.first.c_str(), contact.first.second.c_str());
+          }
+        }
+      }
+
+      if (!collision_free_found) {
         finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
-               "Target pose is colliding in current planning scene.");
+               "Target pose is colliding in current planning scene across all 10 attempts.");
         return;
       }
 
