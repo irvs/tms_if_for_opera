@@ -24,21 +24,17 @@
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/time.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
-// #include "std_msgs/msg/float64.hpp"
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
-// #include "nav_msgs/msg/path.hpp"
 
 // #include "nav2_msgs/action/follow_path.hpp"
 #include "nav2_msgs/action/navigate_to_pose.hpp"
-#include "tms_msg_rp/action/tms_rp_follow_straight.hpp"
 
 class ExcavatorFollowStraight : public rclcpp::Node
 {
 public:
-  using FollowStraight = tms_msg_rp::action::TmsRpFollowStraight;
+  using FollowStraight = nav2_msgs::action::NavigateToPose;
   using GoalHandleFollowStraight = rclcpp_action::ServerGoalHandle<FollowStraight>;
-  // using FollowPath = nav2_msgs::action::FollowPath;
   using NavigateToPose = nav2_msgs::action::NavigateToPose;
   // using GoalHandleFollowPath = rclcpp_action::ClientGoalHandle<FollowPath>;
   using GoalHandleNavigateToPose = rclcpp_action::ClientGoalHandle<NavigateToPose>;
@@ -71,9 +67,6 @@ private:
     const std::shared_ptr<GoalHandleFollowStraight> goal_handle,
     const GoalHandleNavigateToPose::WrappedResult & result);
 
-  // nav_msgs::msg::Path createStraightPath(
-  //   const geometry_msgs::msg::PoseStamped & start,
-  //   const geometry_msgs::msg::PoseStamped & goal);
 
   rclcpp_action::Server<FollowStraight>::SharedPtr action_server_;
 

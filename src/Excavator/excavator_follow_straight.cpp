@@ -72,10 +72,7 @@ void ExcavatorFollowStraight::execute(const std::shared_ptr<GoalHandleFollowStra
     if (!action_client_->wait_for_action_server(std::chrono::seconds(5)))
     {
       RCLCPP_ERROR(this->get_logger(), "NavigateToPose action server is not available");
-
-      result->result = false;
       goal_handle->abort(result);
-
       return;
     }
 
@@ -84,33 +81,25 @@ void ExcavatorFollowStraight::execute(const std::shared_ptr<GoalHandleFollowStra
     // ============================================================
     auto received_goal = goal_handle->get_goal();
 
-    RCLCPP_INFO(this->get_logger(), "Received FollowStraight Goal: x=%.3f, y=%.3f", received_goal->goal.pose.position.x, received_goal->goal.pose.position.y);
+    // RCLCPP_INFO(this->get_logger(), "Received FollowStraight Goal: x=%.3f, y=%.3f", received_goal->pose.pose.position.x, received_goal->pose.pose.position.y);
 
     // ============================================================
     // NavigateToPose Goal
     // ============================================================
     NavigateToPose::Goal nav_goal;
+    nav_goal.pose = received_goal->pose;
 
-
-    // ------------------------------------------------------------
-    // Goal Pose
-    // ------------------------------------------------------------
-    nav_goal.pose = received_goal->goal;
-
-    RCLCPP_INFO(this->get_logger(), "Sending NavigateToPose Goal: x=%.3f, y=%.3f", nav_goal.pose.pose.position.x, nav_goal.pose.pose.position.y);
+    // RCLCPP_INFO(this->get_logger(), "Sending NavigateToPose Goal: x=%.3f, y=%.3f", nav_goal.pose.pose.position.x, nav_goal.pose.pose.position.y);
 
 
     // ============================================================
     // Behavior Tree
     // ============================================================
-
-    // nav_goal.behavior_tree ="/home/common/ros2-tms-for-construction_ws/src/opera/zx200/zx200_ros2/zx200_straight_navigation/linear_path_controller/straight_navigation.xml";
-
     const std::string behavior_tree = this->get_parameter("behavior_tree").as_string(); 
     
     if (behavior_tree.empty()) {
       RCLCPP_ERROR( this->get_logger(), "Parameter 'behavior_tree' is empty"); 
-      result->result = false; goal_handle->abort(result); return; 
+      goal_handle->abort(result); return; 
     } 
       
     nav_goal.behavior_tree = behavior_tree;
