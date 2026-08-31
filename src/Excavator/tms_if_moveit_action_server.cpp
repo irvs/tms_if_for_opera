@@ -361,22 +361,28 @@ private:
         return;
       }
 
-      const std::string default_ik_tip = move_group_->getEndEffectorLink();
-      const std::string fallback_ik_tip = "bucket_link";
-      std::string ik_tip = default_ik_tip;
-      bool ik_available = jmg->canSetStateFromIK(ik_tip);
-      if (!ik_available && ik_tip != fallback_ik_tip) {
-        RCLCPP_WARN(get_logger(), "IK solver not available for tip '%s'; trying fallback tip '%s'", ik_tip.c_str(), fallback_ik_tip.c_str());
-        if (jmg->canSetStateFromIK(fallback_ik_tip)) {
-          ik_tip = fallback_ik_tip;
-          ik_available = true;
-        }
-      }
+      const bool has_joint_values = !goal->joint_values.joint_names.empty() && 
+                                    (goal->joint_values.joint_names.size() == goal->joint_values.joint_values.size());
 
-      if (!ik_available) {
-        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
-               "No IK solver instantiated for group '" + planning_group_ + "' tip '" + ik_tip + "'.");
-        return;
+      std::string ik_tip = "";
+      if (!has_joint_values) {
+        const std::string default_ik_tip = move_group_->getEndEffectorLink();
+        const std::string fallback_ik_tip = "bucket_link";
+        ik_tip = default_ik_tip;
+        bool ik_available = jmg->canSetStateFromIK(ik_tip);
+        if (!ik_available && ik_tip != fallback_ik_tip) {
+          RCLCPP_WARN(get_logger(), "IK solver not available for tip '%s'; trying fallback tip '%s'", ik_tip.c_str(), fallback_ik_tip.c_str());
+          if (jmg->canSetStateFromIK(fallback_ik_tip)) {
+            ik_tip = fallback_ik_tip;
+            ik_available = true;
+          }
+        }
+
+        if (!ik_available) {
+          finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
+                 "No IK solver instantiated for group '" + planning_group_ + "' tip '" + ik_tip + "'.");
+          return;
+        }
       }
 
       if (cancel_if_needed()) return;
@@ -390,13 +396,17 @@ private:
         return;
       }
 
-      RCLCPP_INFO(get_logger(), "Checking collision for pose: [%.3f, %.3f, %.3f]",
-                   goal->pose.position.x, goal->pose.position.y, goal->pose.position.z);
+      if (has_joint_values) {
+        RCLCPP_INFO(get_logger(), "Checking collision for joint values (%zu joints)", goal->joint_values.joint_names.size());
+      } else {
+        RCLCPP_INFO(get_logger(), "Checking collision for pose: [%.3f, %.3f, %.3f]",
+                     goal->pose.position.x, goal->pose.position.y, goal->pose.position.z);
+      }
 
-      const int max_attempts = 1; // 回数を増やしても結果があまり変わらないため1回のみ
+      const int max_attempts = 3;
       bool collision_free_found = false;
 
-      // max_attempts回だけIKと障害物干渉チェックを繰り返す
+      // max_attempts回だけIK/joint_valuesと障害物干渉チェックを繰り返す
       for (int attempt = 1; attempt <= max_attempts; attempt++) {
         if (const auto* prev = pickPrevTrajectory(goal->previous_pose)) {
           setStateFromPrevRobotTrajectory(*prev, test_state, planning_group_, get_logger());
@@ -404,9 +414,20 @@ private:
           test_state = *current_state;
         }
 
-        if (!test_state.setFromIK(jmg, goal->pose, ik_tip)) {
-          RCLCPP_DEBUG(get_logger(), "IK failed on attempt %d/%d", attempt, max_attempts);
-          continue;
+        if (has_joint_values) {
+          for (size_t i = 0; i < goal->joint_values.joint_names.size(); ++i) {
+            test_state.setVariablePosition(goal->joint_values.joint_names[i], goal->joint_values.joint_values[i]);
+          }
+          if (!test_state.satisfiesBounds(jmg)) {
+            RCLCPP_DEBUG(get_logger(), "Joint values out of bounds on attempt %d", attempt);
+            continue;
+          }
+        } else {
+          const double ik_timeout = 0.05; // 50ms timeout for fast IK failure detection
+          if (!test_state.setFromIK(jmg, goal->pose, ik_tip, ik_timeout)) {
+            RCLCPP_DEBUG(get_logger(), "IK failed on attempt %d/%d", attempt, max_attempts);
+            continue;
+          }
         }
         test_state.update();
 
@@ -420,11 +441,11 @@ private:
 
         if (!collision_result.collision) {
           collision_free_found = true;
-          RCLCPP_INFO(get_logger(), "Target pose is collision-free (passed on attempt %d/%d)",
+          RCLCPP_INFO(get_logger(), "Target state is collision-free (passed on attempt %d/%d)",
                       attempt, max_attempts);
           break;
         } else {
-          RCLCPP_WARN(get_logger(), "Target pose collision check attempt %d/%d failed (contacts: %zu)",
+          RCLCPP_WARN(get_logger(), "Target state collision check attempt %d/%d failed (contacts: %zu)",
                       attempt, max_attempts, collision_result.contacts.size());
           for (const auto& contact : collision_result.contacts) {
             RCLCPP_WARN(get_logger(), "  Attempt %d contact: '%s' and '%s'",
@@ -435,8 +456,30 @@ private:
 
       if (!collision_free_found) {
         finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
-               "Target pose is colliding in current planning scene across all 10 attempts.");
+               "Target state is colliding in current planning scene.");
         return;
+      }
+
+      // IKで得られた関節角をresult->planに格納して返す
+      {
+        const auto& joint_names = jmg->getActiveJointModelNames();
+        std::vector<double> joint_positions;
+        test_state.copyJointGroupPositions(jmg, joint_positions);
+
+        trajectory_msgs::msg::JointTrajectoryPoint ik_point;
+        ik_point.positions = joint_positions;
+        ik_point.time_from_start = rclcpp::Duration::from_seconds(0.0);
+
+        trajectory_msgs::msg::JointTrajectory ik_traj;
+        ik_traj.joint_names = joint_names;
+        ik_traj.points.push_back(ik_point);
+
+        result->plan.joint_trajectory = ik_traj;
+
+        RCLCPP_INFO(get_logger(), "IK joint angles packed into result->plan (%zu joints):", joint_names.size());
+        for (size_t i = 0; i < joint_names.size(); ++i) {
+          RCLCPP_INFO(get_logger(), "  %s: %.4f rad", joint_names[i].c_str(), joint_positions[i]);
+        }
       }
 
       publish_fb("pose_check_complete", 0.95f);
