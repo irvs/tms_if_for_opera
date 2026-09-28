@@ -403,10 +403,10 @@ private:
                      goal->pose.position.x, goal->pose.position.y, goal->pose.position.z);
       }
 
-      const int max_attempts = 3;
+      const int max_attempts = 1;
       bool collision_free_found = false;
 
-      // max_attempts回だけIK/joint_valuesと障害物干渉チェックを繰り返す
+      // 障害物干渉チェックを実行
       for (int attempt = 1; attempt <= max_attempts; attempt++) {
         if (const auto* prev = pickPrevTrajectory(goal->previous_pose)) {
           setStateFromPrevRobotTrajectory(*prev, test_state, planning_group_, get_logger());

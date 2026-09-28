@@ -83,6 +83,7 @@ def generate_launch_description():
         executable='tms_if_moveit_action_server',
         namespace='zx200',
         parameters=[
+            {'use_sim_time': LaunchConfiguration('use_sim_time')},
             {'robot_description': robot_description_content},
             {'robot_description_semantic': robot_description_semantic_content},
             {'robot_description_kinematics': kinematics_yaml},
