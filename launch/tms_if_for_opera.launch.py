@@ -38,6 +38,8 @@ def generate_launch_description():
     # Load kinematics.yaml and SRDF
     kinematics_yaml = load_yaml('zx200_moveit_config', 'config/kinematics.yaml') or {}
     robot_description_semantic_content = load_file('zx200_moveit_config', 'config/zx200.srdf') or ''
+
+    straight_navigation_bt = ( '/home/common/ros2-tms-for-construction_ws/src/opera/zx200/zx200_ros2/zx200_straight_navigation/linear_path_controller/straight_navigation.xml' )
     
     # Declare the launch arguments
     declare_use_sim_time_arg = DeclareLaunchArgument(
@@ -108,6 +110,15 @@ def generate_launch_description():
         namespace='zx200',
         parameters=[
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
+        ])
+
+    excavator_follow_straight_node_zx200 = Node(
+        package='tms_if_for_opera',
+        executable='excavator_follow_straight',
+        namespace='zx200',
+        parameters=[
+            {'use_sim_time': LaunchConfiguration('use_sim_time')},
+            {'behavior_tree': straight_navigation_bt }
         ])
     
     crawlerdump_navigate_through_poses_node_mst110cr_2 = Node(
@@ -251,6 +262,7 @@ def generate_launch_description():
         excavator_navigate_through_poses_node_zx200,
         excavator_navigate_anywhere_node_zx200,
         excavator_follow_waypoints_node_zx200,
+        excavator_follow_straight_node_zx200,
 
         crawlerdump_navigate_through_poses_node_mst110cr_2,
         crawlerdump_navigate_anywhere_node_mst110cr_2,

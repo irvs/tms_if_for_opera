@@ -16,6 +16,7 @@ set(EXCAVATOR_TARGETS
   excavator_navigate_through_poses
   excavator_navigate_anywhere
   excavator_follow_waypoints
+  excavator_follow_straight
 )
 
 set(CRAWLERDUMP_TARGETS
