@@ -76,8 +76,13 @@ Moveit2LevelActionServer::Moveit2LevelActionServer(const rclcpp::NodeOptions& op
   move_group_options_ = std::make_shared<moveit::planning_interface::MoveGroupInterface::Options>(planning_group_, "robot_description", namespace_param);
   move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(move_group_node_, *move_group_options_);
 
-  move_group_->setMaxVelocityScalingFactor(1.0);
-  move_group_->setMaxAccelerationScalingFactor(1.0);
+  const double max_velocity_scaling_factor = this->declare_parameter<double>("max_velocity_scaling_factor", 1.0);
+  const double max_acceleration_scaling_factor =
+      this->declare_parameter<double>("max_acceleration_scaling_factor", 1.0);
+  RCLCPP_INFO(this->get_logger(), "Max velocity scaling factor: %.3f, max acceleration scaling factor: %.3f",
+              max_velocity_scaling_factor, max_acceleration_scaling_factor);
+  move_group_->setMaxVelocityScalingFactor(max_velocity_scaling_factor);
+  move_group_->setMaxAccelerationScalingFactor(max_acceleration_scaling_factor);
   move_group_->setNumPlanningAttempts(100);
   move_group_->setPlanningTime(10.0);
   move_group_->setPlannerId("RRTConnectkConfigDefault");

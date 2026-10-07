@@ -77,8 +77,13 @@ Moveit2ReleaseSimpleActionServer::Moveit2ReleaseSimpleActionServer(const rclcpp:
   
   // moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
 
-  move_group_->setMaxVelocityScalingFactor(1.0);
-  move_group_->setMaxAccelerationScalingFactor(1.0);
+  const double max_velocity_scaling_factor = this->declare_parameter<double>("max_velocity_scaling_factor", 1.0);
+  const double max_acceleration_scaling_factor =
+      this->declare_parameter<double>("max_acceleration_scaling_factor", 1.0);
+  RCLCPP_INFO(this->get_logger(), "Max velocity scaling factor: %.3f, max acceleration scaling factor: %.3f",
+              max_velocity_scaling_factor, max_acceleration_scaling_factor);
+  move_group_->setMaxVelocityScalingFactor(max_velocity_scaling_factor);
+  move_group_->setMaxAccelerationScalingFactor(max_acceleration_scaling_factor);
   move_group_->setNumPlanningAttempts(10);
   move_group_->setPlanningTime(10.0);
   move_group_->setPlannerId("RRTConnectkConfigDefault");

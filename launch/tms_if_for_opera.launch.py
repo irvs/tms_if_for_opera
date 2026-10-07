@@ -1,5 +1,6 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch.actions import DeclareLaunchArgument
 from ament_index_python.packages import get_package_share_directory
 from launch.substitutions import LaunchConfiguration
@@ -43,6 +44,16 @@ def generate_launch_description():
         default_value='',
         description='Other robots configuration for collision detection as comma-separated string (e.g., "mst110cr,robot2")')
 
+    declare_max_velocity_scaling_factor_arg = DeclareLaunchArgument(
+        'max_velocity_scaling_factor',
+        default_value='1.0',
+        description='Max velocity scaling factor of the MoveIt action servers (0.0, 1.0]')
+
+    declare_max_acceleration_scaling_factor_arg = DeclareLaunchArgument(
+        'max_acceleration_scaling_factor',
+        default_value='1.0',
+        description='Max acceleration scaling factor of the MoveIt action servers (0.0, 1.0]')
+
     # Use xacro package to convert xacro file to URDF
     robot_description_content = Command(['xacro ', LaunchConfiguration('robot_description')])
 
@@ -56,6 +67,10 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
+            {'max_velocity_scaling_factor': ParameterValue(
+                LaunchConfiguration('max_velocity_scaling_factor'), value_type=float)},
+            {'max_acceleration_scaling_factor': ParameterValue(
+                LaunchConfiguration('max_acceleration_scaling_factor'), value_type=float)},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
     moveit2_change_pose_plan_action_server_node_zx200 = Node(
@@ -67,6 +82,10 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
+            {'max_velocity_scaling_factor': ParameterValue(
+                LaunchConfiguration('max_velocity_scaling_factor'), value_type=float)},
+            {'max_acceleration_scaling_factor': ParameterValue(
+                LaunchConfiguration('max_acceleration_scaling_factor'), value_type=float)},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
     moveit2_excavate_simple_action_server_node_zx200 = Node(
@@ -78,6 +97,10 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
+            {'max_velocity_scaling_factor': ParameterValue(
+                LaunchConfiguration('max_velocity_scaling_factor'), value_type=float)},
+            {'max_acceleration_scaling_factor': ParameterValue(
+                LaunchConfiguration('max_acceleration_scaling_factor'), value_type=float)},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
     moveit2_excavate_simple_plan_action_server_node_zx200 = Node(
@@ -89,6 +112,10 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
+            {'max_velocity_scaling_factor': ParameterValue(
+                LaunchConfiguration('max_velocity_scaling_factor'), value_type=float)},
+            {'max_acceleration_scaling_factor': ParameterValue(
+                LaunchConfiguration('max_acceleration_scaling_factor'), value_type=float)},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
     moveit2_release_simple_action_server_node_zx200 = Node(
@@ -100,6 +127,10 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
+            {'max_velocity_scaling_factor': ParameterValue(
+                LaunchConfiguration('max_velocity_scaling_factor'), value_type=float)},
+            {'max_acceleration_scaling_factor': ParameterValue(
+                LaunchConfiguration('max_acceleration_scaling_factor'), value_type=float)},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
     moveit2_level_action_server_node_zx200 = Node(
@@ -111,6 +142,10 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
+            {'max_velocity_scaling_factor': ParameterValue(
+                LaunchConfiguration('max_velocity_scaling_factor'), value_type=float)},
+            {'max_acceleration_scaling_factor': ParameterValue(
+                LaunchConfiguration('max_acceleration_scaling_factor'), value_type=float)},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
     moveit2_gather_action_server_node_zx200 = Node(
@@ -122,6 +157,10 @@ def generate_launch_description():
             {'planning_group': LaunchConfiguration('planning_group')},
             {'collision_object_record_name': LaunchConfiguration('collision_object_record_name')},
             {'collision_object_dump_record_name': LaunchConfiguration('collision_object_dump_record_name')},
+            {'max_velocity_scaling_factor': ParameterValue(
+                LaunchConfiguration('max_velocity_scaling_factor'), value_type=float)},
+            {'max_acceleration_scaling_factor': ParameterValue(
+                LaunchConfiguration('max_acceleration_scaling_factor'), value_type=float)},
             {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ])
     scene_manager_node_zx200 = Node(
@@ -295,6 +334,8 @@ def generate_launch_description():
         declare_collision_object_record_name_arg,
         declare_collision_object_dump_record_name_arg,
         declare_other_robots_config_arg,
+        declare_max_velocity_scaling_factor_arg,
+        declare_max_acceleration_scaling_factor_arg,
         
         moveit2_change_pose_action_server_node_zx200,
         moveit2_change_pose_plan_action_server_node_zx200,

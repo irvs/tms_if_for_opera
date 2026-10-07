@@ -309,3 +309,11 @@ ros2 launch tms_ts_launch tms_ts_construction.launch.py task_id:=<task_id>
 ※<task_id>は、zx200を使用するタスクのidを指定する。
     
 
+### 速度・加速度の倍率
+
+MoveIt の action server（`moveit2_*_action_server`）が軌道計画に使う速度・加速度の倍率は、launch 引数 `max_velocity_scaling_factor` と `max_acceleration_scaling_factor` で指定できる（既定値はどちらも `1.0`）。
+
+```bash
+cd ~/ros2-tms-for-construction_ws && source install/setup.bash
+ros2 launch tms_if_for_opera tms_if_for_opera.launch.py max_velocity_scaling_factor:=0.3 max_acceleration_scaling_factor:=0.3
+```
