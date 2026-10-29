@@ -512,6 +512,12 @@ private:
       
       if (request->get_current_state) {
         auto state = move_group_->getCurrentState();
+        if (!state) {
+          response->success = false;
+          response->message = "Failed to get current robot state";
+          RCLCPP_ERROR(get_logger(), "%s", response->message.c_str());
+          return;
+        }
         sensor_msgs::msg::JointState js;
         js.header.stamp = this->now();
         js.name = move_group_->getJointNames();

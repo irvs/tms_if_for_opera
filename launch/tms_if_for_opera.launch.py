@@ -69,6 +69,9 @@ def generate_launch_description():
         package='tms_if_for_opera',
         executable='tms_if_moveit_action_server',
         namespace='zx200',
+        parameters=[
+            {'use_sim_time': LaunchConfiguration('use_sim_time')},
+        ],
     )
     
     excavator_navigate_through_poses_node_zx200 = Node(
