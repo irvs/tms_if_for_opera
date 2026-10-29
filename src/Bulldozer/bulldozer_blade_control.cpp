@@ -155,20 +155,41 @@ void BulldozerBladeControl::result_callback(
   auto result_to_server = std::make_shared<Action::Result>();
   result_to_server->success = (result.code == rclcpp_action::ResultCode::SUCCEEDED);
 
-  switch (result.code) {
+
+    switch (result.code) {
     case rclcpp_action::ResultCode::SUCCEEDED:
+      RCLCPP_INFO(
+        this->get_logger(),
+        "Bulldozer blade control succeeded: server goal execution completed successfully");
+
       server_goal_handle->succeed(result_to_server);
+
+      RCLCPP_INFO(
+        this->get_logger(),
+        "Bulldozer blade control: server goal marked as SUCCEEDED");
       break;
 
     case rclcpp_action::ResultCode::ABORTED:
+      RCLCPP_ERROR(
+        this->get_logger(),
+        "Bulldozer blade control aborted");
+
       server_goal_handle->abort(result_to_server);
       break;
 
     case rclcpp_action::ResultCode::CANCELED:
+      RCLCPP_WARN(
+        this->get_logger(),
+        "Bulldozer blade control canceled");
+
       server_goal_handle->canceled(result_to_server);
       break;
 
     default:
+      RCLCPP_ERROR(
+        this->get_logger(),
+        "Bulldozer blade control failed: unknown result code");
+
       server_goal_handle->abort(result_to_server);
       break;
   }
