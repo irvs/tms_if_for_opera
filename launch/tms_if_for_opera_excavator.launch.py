@@ -13,7 +13,7 @@ import yaml
 def load_yaml(package_name, file_path):
     package_path = get_package_share_directory(package_name)
     absolute_file_path = os.path.join(package_path, file_path)
-    
+
     try:
         with open(absolute_file_path, 'r') as file:
             return yaml.safe_load(file)
@@ -21,6 +21,32 @@ def load_yaml(package_name, file_path):
         return None
 
 def generate_launch_description():
+    declare_monitor_enabled_arg = DeclareLaunchArgument(
+        'monitor_enabled', default_value='false',
+        description='Enable robot-state communication monitoring')
+    declare_monitor_type_arg = DeclareLaunchArgument(
+        'monitor_type', default_value='joint_state',
+        description='Monitor type: pose or joint_state (pose supports PoseStamped or Odometry)')
+    declare_monitor_msg_type_arg = DeclareLaunchArgument(
+        'monitor_msg_type', default_value='geometry_msgs/msg/PoseStamped',
+        description='Pose message type: geometry_msgs/msg/PoseStamped or nav_msgs/msg/Odometry')
+    declare_monitor_topic_arg = DeclareLaunchArgument(
+        'monitor_topic', default_value='joint_states',
+        description='Robot-state topic to monitor (relative names follow node namespace)')
+    declare_monitor_timeout_arg = DeclareLaunchArgument(
+        'monitor_timeout', default_value='1.0',
+        description='Communication timeout in seconds')
+    declare_monitor_check_period_arg = DeclareLaunchArgument(
+        'monitor_check_period', default_value='0.1',
+        description='Communication monitor check period in seconds')
+    monitor_parameters = {
+        'monitor_enabled': LaunchConfiguration('monitor_enabled'),
+        'monitor_type': LaunchConfiguration('monitor_type'),
+        'monitor_msg_type': LaunchConfiguration('monitor_msg_type'),
+        'monitor_topic': LaunchConfiguration('monitor_topic'),
+        'monitor_timeout': LaunchConfiguration('monitor_timeout'),
+        'monitor_check_period': LaunchConfiguration('monitor_check_period'),
+    }
     # Get the package directory
     zx200_description_dir = get_package_share_directory('zx200_description')
     zx200_moveit_config_dir = get_package_share_directory('zx200_moveit_config')
@@ -29,17 +55,17 @@ def generate_launch_description():
     kinematics_yaml = load_yaml('zx200_moveit_config', 'config/kinematics.yaml')
 
     straight_navigation_bt = ( '/home/common/ros2-tms-for-construction_ws/src/opera/zx200/zx200_ros2/zx200_straight_navigation/linear_path_controller/straight_navigation.xml' )
-    
+
     # Declare the launch arguments
     declare_use_sim_time_arg = DeclareLaunchArgument(
         'use_sim_time',
         default_value='false',
         description='Use simulation (Gazebo) clock if true')
-    
+
     declare_robot_name_arg = DeclareLaunchArgument(
         'robot_name',
-        default_value='zx200')    
-    
+        default_value='zx200')
+
     declare_robot_description_arg = DeclareLaunchArgument(
         'robot_description',
         default_value=str(zx200_description_dir + '/urdf/' + 'zx200.xacro'),
@@ -74,33 +100,29 @@ def generate_launch_description():
         executable='tms_if_moveit_action_server',
         namespace='zx200',
         parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')},
-        ],
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}, monitor_parameters],
     )
-    
+
     excavator_navigate_through_poses_node_zx200 = Node(
         package='tms_if_for_opera',
         executable='excavator_navigate_through_poses',
         namespace=LaunchConfiguration('robot_name'),
         parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}, monitor_parameters])
 
     excavator_navigate_anywhere_node_zx200 = Node(
         package='tms_if_for_opera',
         executable='excavator_navigate_anywhere',
         namespace=LaunchConfiguration('robot_name'),
         parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])  
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}, monitor_parameters])
 
     excavator_follow_waypoints_node_zx200 = Node(
         package='tms_if_for_opera',
         executable='excavator_follow_waypoints',
         namespace=LaunchConfiguration('robot_name'),
         parameters=[
-            {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        ])
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}, monitor_parameters])
 
     excavator_follow_straight_node_zx200 = Node(
         package='tms_if_for_opera',
@@ -108,12 +130,18 @@ def generate_launch_description():
         namespace=LaunchConfiguration('robot_name'),
         parameters=[
             {'use_sim_time': LaunchConfiguration('use_sim_time')},
-            {'behavior_tree': straight_navigation_bt }
-        ])
+            {'behavior_tree': straight_navigation_bt }, monitor_parameters])
 
 
     # Build the launch description
     ld = LaunchDescription([
+        declare_monitor_enabled_arg,
+        declare_monitor_type_arg,
+        declare_monitor_msg_type_arg,
+        declare_monitor_topic_arg,
+        declare_monitor_timeout_arg,
+        declare_monitor_check_period_arg,
+
         declare_use_sim_time_arg,
         declare_robot_name_arg,
         declare_robot_description_arg,
@@ -121,13 +149,13 @@ def generate_launch_description():
         declare_collision_object_record_name_arg,
         declare_collision_object_dump_record_name_arg,
         declare_other_robots_config_arg,
-        
+
         tms_if_moveit_zx200,
         excavator_navigate_through_poses_node_zx200,
         excavator_navigate_anywhere_node_zx200,
         excavator_follow_waypoints_node_zx200,
         # excavator_follow_straight_node_zx200,
-        
+
     ])
 
     return ld

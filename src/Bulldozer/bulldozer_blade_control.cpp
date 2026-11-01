@@ -9,6 +9,21 @@ using std::placeholders::_2;
 BulldozerBladeControl::BulldozerBladeControl()
 : rclcpp::Node("tms_if_bulldozer_blade_control_node")
 {
+    communication_monitor_ = std::make_shared<CommunicationMonitor>(this);
+    communication_monitor_->set_disconnect_callback([this]() {
+      RCLCPP_ERROR(this->get_logger(), "Communication lost while action is active; aborting goal");
+      try {
+        action_client_->async_cancel_all_goals();
+      } catch (const std::exception & e) {
+        RCLCPP_ERROR(this->get_logger(), "Failed to cancel downstream goals: %s", e.what());
+      }
+      if (current_goal_handle_ && current_goal_handle_->is_active()) {
+        auto result = std::make_shared<Action::Result>();
+        if (current_goal_handle_->is_canceling()) current_goal_handle_->canceled(result);
+        else current_goal_handle_->abort(result);
+      }
+    });
+
   // 受け口（このノードが提供するアクション名）
   action_server_ = rclcpp_action::create_server<Action>(
     this,
@@ -25,6 +40,11 @@ rclcpp_action::GoalResponse BulldozerBladeControl::handle_goal(
   const rclcpp_action::GoalUUID & /*uuid*/,
   std::shared_ptr<const Action::Goal> goal)
 {
+    if (!communication_monitor_->is_connected()) {
+      RCLCPP_WARN(this->get_logger(), "Robot communication unavailable; rejecting action goal");
+      return rclcpp_action::GoalResponse::REJECT;
+    }
+
   // Goal の最低限チェック（仕様通り）
   if (goal->joint_name.empty()) {
     RCLCPP_WARN(this->get_logger(), "Reject: joint_name is empty");
@@ -82,6 +102,12 @@ rclcpp_action::CancelResponse BulldozerBladeControl::handle_cancel(
 
 void BulldozerBladeControl::handle_accepted(const std::shared_ptr<ServerGoalHandle> goal_handle)
 {
+    current_goal_handle_ = goal_handle;
+    if (!communication_monitor_->is_connected()) {
+      RCLCPP_WARN(this->get_logger(), "Communication lost before execution started; aborting accepted goal");
+      if (goal_handle->is_active()) goal_handle->abort(std::make_shared<Action::Result>());
+      return;
+    }
   std::thread{std::bind(&BulldozerBladeControl::execute, this, _1), goal_handle}.detach();
 }
 
@@ -136,6 +162,12 @@ void BulldozerBladeControl::execute(const std::shared_ptr<ServerGoalHandle> serv
 
 void BulldozerBladeControl::goal_response_callback(const typename ClientGoalHandle::SharedPtr & goal_handle)
 {
+  if (goal_handle && !communication_monitor_->is_connected()) {
+    RCLCPP_WARN(this->get_logger(), "Communication lost before downstream goal acceptance; canceling downstream goal");
+    action_client_->async_cancel_goal(goal_handle);
+    return;
+  }
+
   if (!goal_handle) {
     RCLCPP_ERROR(this->get_logger(), "Downstream goal rejected");
   } else {

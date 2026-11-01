@@ -40,6 +40,9 @@ find_package(tms_msg_rp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 find_package(urdf REQUIRED)
 find_package(moveit_common REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
@@ -57,6 +60,9 @@ set(COMMON_DEPENDENCIES
   "moveit_ros_planning_interface"
   "rosidl_default_runtime"
   "std_msgs"
+  "geometry_msgs"
+  "nav_msgs"
+  "sensor_msgs"
   "tf2"
   "tf2_geometry_msgs"
 
@@ -117,5 +123,7 @@ install(DIRECTORY
   collision_objects
   DESTINATION share/${PROJECT_NAME}/
 )
+
+install(DIRECTORY include/ DESTINATION include)
 
 ament_package()

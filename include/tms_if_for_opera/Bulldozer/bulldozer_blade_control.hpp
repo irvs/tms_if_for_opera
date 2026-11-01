@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 
+#include "tms_if_for_opera/common/communication_monitor.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 
@@ -46,6 +47,9 @@ private:
   void result_callback(
     const std::shared_ptr<ServerGoalHandle> server_goal_handle,
     const WrappedResult & result);
-};
+
+      std::shared_ptr<ServerGoalHandle> current_goal_handle_;
+std::shared_ptr<CommunicationMonitor> communication_monitor_;
+    };
 
 #endif  // BULLDOZER_BLADE_CONTROL_HPP

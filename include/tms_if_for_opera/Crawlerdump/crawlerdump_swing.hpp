@@ -25,6 +25,7 @@
 #include <sstream>
 #include <cmath>
 
+#include "tms_if_for_opera/common/communication_monitor.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/time.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
@@ -64,6 +65,8 @@ private:
                             const std::shared_ptr<const SetSwingAngle::Feedback> feedback);
     void result_callback(const std::shared_ptr<GoalHandle> goal_handle,
                         const GoalHandleCrawlerdumpSwing::WrappedResult& result);
-};
+
+    std::shared_ptr<CommunicationMonitor> communication_monitor_;
+    };
 
 #endif

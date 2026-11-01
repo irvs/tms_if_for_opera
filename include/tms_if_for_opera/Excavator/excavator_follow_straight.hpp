@@ -21,6 +21,7 @@
 // #include <chrono>
 // #include <vector>
 
+#include "tms_if_for_opera/common/communication_monitor.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/time.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
@@ -77,6 +78,8 @@ private:
 
   std::shared_ptr<GoalHandleFollowStraight>
     current_goal_handle_;
-};
+
+    std::shared_ptr<CommunicationMonitor> communication_monitor_;
+    };
 
 #endif
