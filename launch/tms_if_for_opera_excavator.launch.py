@@ -34,7 +34,7 @@ def generate_launch_description():
         'monitor_topic', default_value='joint_states',
         description='Robot-state topic to monitor (relative names follow node namespace)')
     declare_monitor_timeout_arg = DeclareLaunchArgument(
-        'monitor_timeout', default_value='1.0',
+        'monitor_timeout', default_value='3.0',#'1.0',
         description='Communication timeout in seconds')
     declare_monitor_check_period_arg = DeclareLaunchArgument(
         'monitor_check_period', default_value='0.1',
