@@ -154,7 +154,7 @@ def generate_launch_description():
         excavator_navigate_through_poses_node_zx200,
         excavator_navigate_anywhere_node_zx200,
         excavator_follow_waypoints_node_zx200,
-        # excavator_follow_straight_node_zx200,
+        excavator_follow_straight_node_zx200,
 
     ])
 
