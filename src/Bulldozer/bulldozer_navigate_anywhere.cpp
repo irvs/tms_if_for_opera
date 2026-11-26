@@ -21,6 +21,21 @@ using std::placeholders::_2;
 
 BulldozerNavigateAnywhere::BulldozerNavigateAnywhere() : rclcpp::Node("tms_if_navigate_anywhere_node")
 {
+    communication_monitor_ = std::make_shared<CommunicationMonitor>(this);
+    communication_monitor_->set_disconnect_callback([this]() {
+      RCLCPP_ERROR(this->get_logger(), "Communication lost while action is active; aborting goal");
+      try {
+        action_client_->async_cancel_all_goals();
+      } catch (const std::exception & e) {
+        RCLCPP_ERROR(this->get_logger(), "Failed to cancel downstream goals: %s", e.what());
+      }
+      if (current_goal_handle_ && current_goal_handle_->is_active()) {
+        auto result = std::make_shared<NavigateToPose::Result>();
+        if (current_goal_handle_->is_canceling()) current_goal_handle_->canceled(result);
+        else current_goal_handle_->abort(result);
+      }
+    });
+
     this->action_server_ = rclcpp_action::create_server<NavigateToPose>(
         this, "tms_rp_navigate_anywhere",
         std::bind(&BulldozerNavigateAnywhere::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
@@ -34,6 +49,11 @@ BulldozerNavigateAnywhere::BulldozerNavigateAnywhere() : rclcpp::Node("tms_if_na
 rclcpp_action::GoalResponse BulldozerNavigateAnywhere::handle_goal(
     const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const NavigateToPose::Goal> goal)
 {
+    if (!communication_monitor_->is_connected()) {
+      RCLCPP_WARN(this->get_logger(), "Robot communication unavailable; rejecting action goal");
+      return rclcpp_action::GoalResponse::REJECT;
+    }
+
     RCLCPP_INFO(this->get_logger(), "Received goal request");
     return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
@@ -52,6 +72,12 @@ rclcpp_action::CancelResponse BulldozerNavigateAnywhere::handle_cancel(const std
 
 void BulldozerNavigateAnywhere::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
 {
+    current_goal_handle_ = goal_handle;
+    if (!communication_monitor_->is_connected()) {
+      RCLCPP_WARN(this->get_logger(), "Communication lost before execution started; aborting accepted goal");
+      if (goal_handle->is_active()) goal_handle->abort(std::make_shared<NavigateToPose::Result>());
+      return;
+    }
     using namespace std::placeholders;
     std::thread{ std::bind(&BulldozerNavigateAnywhere::execute, this, _1), goal_handle }.detach();
 }
@@ -59,9 +85,7 @@ void BulldozerNavigateAnywhere::handle_accepted(const std::shared_ptr<GoalHandle
 void BulldozerNavigateAnywhere::execute(const std::shared_ptr<GoalHandle> goal_handle)
 {
     RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_navigate_anywhere_node) is executing...");
-    current_goal_handle_ = goal_handle;
-
-    auto result = std::make_shared<NavigateToPose::Result>();
+auto result = std::make_shared<NavigateToPose::Result>();
     auto handle_error = [&](const std::string& message) {
         if (goal_handle->is_active())
         {
@@ -92,6 +116,12 @@ void BulldozerNavigateAnywhere::execute(const std::shared_ptr<GoalHandle> goal_h
 
 void BulldozerNavigateAnywhere::goal_response_callback(const GoalHandleNavigateToPose::SharedPtr& goal_handle)
 {
+  if (goal_handle && !communication_monitor_->is_connected()) {
+    RCLCPP_WARN(this->get_logger(), "Communication lost before downstream goal acceptance; canceling downstream goal");
+    action_client_->async_cancel_goal(goal_handle);
+    return;
+  }
+
   if (!goal_handle)
   {
     RCLCPP_ERROR(this->get_logger(), "Goal was rejected by server");

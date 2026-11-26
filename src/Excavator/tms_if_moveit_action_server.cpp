@@ -1,4 +1,5 @@
 #include <memory>
+#include <atomic>
 #include <string>
 #include <vector>
 #include <map>
@@ -10,6 +11,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
+#include "tms_if_for_opera/common/communication_monitor.hpp"
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/pose.hpp"
@@ -84,6 +86,15 @@ public:
         move_group_node_, *move_group_options_);
     
     RCLCPP_INFO(get_logger(), "MoveGroupInterface created successfully");
+
+    communication_monitor_ = std::make_shared<CommunicationMonitor>(this);
+    communication_monitor_->set_disconnect_callback([this]() {
+      communication_lost_.store(true);
+      RCLCPP_ERROR(get_logger(), "Robot communication lost; stopping MoveIt execution");
+      if (move_group_) {
+        move_group_->stop();
+      }
+    });
     
     action_server_ = rclcpp_action::create_server<TmsRpExcavator>(
       this,
@@ -124,6 +135,8 @@ public:
 
 private:
   rclcpp_action::Server<TmsRpExcavator>::SharedPtr action_server_;
+  std::shared_ptr<CommunicationMonitor> communication_monitor_;
+  std::atomic<bool> communication_lost_{false};
   
   // MoveGroupInterface用の専用ノードとExecutor
   rclcpp::Node::SharedPtr move_group_node_;
@@ -150,6 +163,10 @@ private:
     const rclcpp_action::GoalUUID&,
     std::shared_ptr<const TmsRpExcavator::Goal> goal)
   {
+    if (!communication_monitor_->is_connected()) {
+      RCLCPP_WARN(get_logger(), "Robot communication unavailable; rejecting MoveIt goal");
+      return rclcpp_action::GoalResponse::REJECT;
+    }
     RCLCPP_INFO(get_logger(), "=== Received Goal ===");
     RCLCPP_INFO(get_logger(), "  Command: %d", goal->command);
     RCLCPP_INFO(get_logger(), "  Planning group: %s", goal->planning_group.c_str());
@@ -171,6 +188,7 @@ private:
 
   void handle_accepted(const std::shared_ptr<GoalHandleTms> goal_handle)
   {
+    communication_lost_.store(!communication_monitor_->is_connected());
     RCLCPP_INFO(get_logger(), "Goal accepted, starting execution thread");
     std::thread{std::bind(&TmsIfMoveItActionServer::execute, this, std::placeholders::_1), goal_handle}.detach();
   }
@@ -197,15 +215,30 @@ private:
     };
 
     auto finish = [&](bool ok, int32_t err_code, const std::string& msg){
-      RCLCPP_INFO(get_logger(), "Finish: success=%d, error_code=%d, msg=%s", ok, err_code, msg.c_str());
+      std::string final_message = msg;
+      if (communication_lost_.load()) {
+        ok = false;
+        err_code = moveit_msgs::msg::MoveItErrorCodes::FAILURE;
+        final_message = "Robot communication lost.";
+      }
+      RCLCPP_INFO(get_logger(), "Finish: success=%d, error_code=%d, msg=%s", ok, err_code, final_message.c_str());
       result->success = ok;
       result->moveit_error_code = err_code;
-      result->message = msg;
+      result->message = final_message;
       if (ok) goal_handle->succeed(result);
       else goal_handle->abort(result);
     };
 
     auto cancel_if_needed = [&]()->bool{
+      if (communication_lost_.load()) {
+        RCLCPP_ERROR(get_logger(), "Aborting MoveIt goal because robot-state topic timed out");
+        move_group_->stop();
+        result->success = false;
+        result->moveit_error_code = moveit_msgs::msg::MoveItErrorCodes::FAILURE;
+        result->message = "Robot communication lost.";
+        if (goal_handle->is_active()) goal_handle->abort(result);
+        return true;
+      }
       if (goal_handle->is_canceling()) {
         RCLCPP_WARN(get_logger(), "Goal is being canceled");
         move_group_->stop();
@@ -255,6 +288,10 @@ private:
 
       auto exec_res = move_group_->execute(final_plan);
 
+      if (communication_lost_.load()) {
+        cancel_if_needed();
+        return;
+      }
       if (exec_res != moveit::core::MoveItErrorCode::SUCCESS) {
         finish(false, exec_res.val, "Execute trajectory failed.");
         return;
@@ -289,6 +326,7 @@ private:
 
       moveit::planning_interface::MoveGroupInterface::Plan plan;
       auto plan_res = move_group_->plan(plan);
+      if (cancel_if_needed()) return;
       
       if (plan_res != moveit::core::MoveItErrorCode::SUCCESS) {
         finish(false, plan_res.val, "Planning to pose failed.");
@@ -365,6 +403,7 @@ private:
 
       moveit::planning_interface::MoveGroupInterface::Plan plan;
       auto plan_res = move_group_->plan(plan);
+      if (cancel_if_needed()) return;
       
       if (plan_res != moveit::core::MoveItErrorCode::SUCCESS) {
         finish(false, plan_res.val, "Planning to joints failed.");
@@ -442,8 +481,9 @@ private:
       double fraction =move_group_->computeCartesianPath(waypoints, 0.01, 0.0, trajectory);
       
       if (fraction < 0.95){
-      result->success = false;
-      return;
+        finish(false, moveit_msgs::msg::MoveItErrorCodes::FAILURE,
+               "Cartesian path planning fraction is below 0.95.");
+        return;
       }
 
       //速度、加速度の情報を追加

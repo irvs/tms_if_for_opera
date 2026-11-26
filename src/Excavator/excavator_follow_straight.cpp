@@ -21,6 +21,21 @@ using std::placeholders::_2;
 
 ExcavatorFollowStraight::ExcavatorFollowStraight() : rclcpp::Node("tms_if_follow_straight_node")
 {
+    communication_monitor_ = std::make_shared<CommunicationMonitor>(this);
+    communication_monitor_->set_disconnect_callback([this]() {
+      RCLCPP_ERROR(this->get_logger(), "Communication lost while action is active; aborting goal");
+      try {
+        action_client_->async_cancel_all_goals();
+      } catch (const std::exception & e) {
+        RCLCPP_ERROR(this->get_logger(), "Failed to cancel downstream goals: %s", e.what());
+      }
+      if (current_goal_handle_ && current_goal_handle_->is_active()) {
+        auto result = std::make_shared<FollowStraight::Result>();
+        if (current_goal_handle_->is_canceling()) current_goal_handle_->canceled(result);
+        else current_goal_handle_->abort(result);
+      }
+    });
+
     this->declare_parameter<std::string>( "behavior_tree", "" );
 
     this->action_server_ = rclcpp_action::create_server<FollowStraight>(
@@ -36,6 +51,11 @@ ExcavatorFollowStraight::ExcavatorFollowStraight() : rclcpp::Node("tms_if_follow
 rclcpp_action::GoalResponse ExcavatorFollowStraight::handle_goal(
     const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const FollowStraight::Goal> goal)
 {
+    if (!communication_monitor_->is_connected()) {
+      RCLCPP_WARN(this->get_logger(), "Robot communication unavailable; rejecting action goal");
+      return rclcpp_action::GoalResponse::REJECT;
+    }
+
     RCLCPP_INFO(this->get_logger(), "Received goal request");
     return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
@@ -54,6 +74,12 @@ rclcpp_action::CancelResponse ExcavatorFollowStraight::handle_cancel(const std::
 
 void ExcavatorFollowStraight::handle_accepted(const std::shared_ptr<GoalHandleFollowStraight> goal_handle)
 {
+    current_goal_handle_ = goal_handle;
+    if (!communication_monitor_->is_connected()) {
+      RCLCPP_WARN(this->get_logger(), "Communication lost before execution started; aborting accepted goal");
+      if (goal_handle->is_active()) goal_handle->abort(std::make_shared<FollowStraight::Result>());
+      return;
+    }
     using namespace std::placeholders;
     std::thread{ std::bind(&ExcavatorFollowStraight::execute, this, _1), goal_handle }.detach();
 }
@@ -61,9 +87,7 @@ void ExcavatorFollowStraight::handle_accepted(const std::shared_ptr<GoalHandleFo
 void ExcavatorFollowStraight::execute(const std::shared_ptr<GoalHandleFollowStraight> goal_handle)
 {
     RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_follow_straight_node) is executing...");
-    current_goal_handle_ = goal_handle;
-
-    auto result = std::make_shared<FollowStraight::Result>();
+auto result = std::make_shared<FollowStraight::Result>();
 
 
     // ============================================================
@@ -137,6 +161,12 @@ void ExcavatorFollowStraight::execute(const std::shared_ptr<GoalHandleFollowStra
 
 void ExcavatorFollowStraight::goal_response_callback(const GoalHandleNavigateToPose::SharedPtr& goal_handle)
 {
+  if (goal_handle && !communication_monitor_->is_connected()) {
+    RCLCPP_WARN(this->get_logger(), "Communication lost before downstream goal acceptance; canceling downstream goal");
+    action_client_->async_cancel_goal(goal_handle);
+    return;
+  }
+
   if (!goal_handle)
   {
     RCLCPP_ERROR(this->get_logger(), "Goal was rejected by server");

@@ -21,6 +21,21 @@ using std::placeholders::_2;
 
 CrawlerdumpSwing::CrawlerdumpSwing() : rclcpp::Node("tms_if_crawlerdump_swing_node")
 {
+    communication_monitor_ = std::make_shared<CommunicationMonitor>(this);
+    communication_monitor_->set_disconnect_callback([this]() {
+      RCLCPP_ERROR(this->get_logger(), "Communication lost while action is active; aborting goal");
+      try {
+        action_client_->async_cancel_all_goals();
+      } catch (const std::exception & e) {
+        RCLCPP_ERROR(this->get_logger(), "Failed to cancel downstream goals: %s", e.what());
+      }
+      if (current_goal_handle_ && current_goal_handle_->is_active()) {
+        auto result = std::make_shared<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle::Result>();
+        if (current_goal_handle_->is_canceling()) current_goal_handle_->canceled(result);
+        else current_goal_handle_->abort(result);
+      }
+    });
+
     this->action_server_ = rclcpp_action::create_server<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle>(
         this, "tms_rp_set_swing_angle",
         std::bind(&CrawlerdumpSwing::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
@@ -34,6 +49,11 @@ CrawlerdumpSwing::CrawlerdumpSwing() : rclcpp::Node("tms_if_crawlerdump_swing_no
 rclcpp_action::GoalResponse CrawlerdumpSwing::handle_goal(
     const rclcpp_action::GoalUUID& uuid, std::shared_ptr<const tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle::Goal> goal)
 {
+    if (!communication_monitor_->is_connected()) {
+      RCLCPP_WARN(this->get_logger(), "Robot communication unavailable; rejecting action goal");
+      return rclcpp_action::GoalResponse::REJECT;
+    }
+
     RCLCPP_INFO(this->get_logger(), "Received goal request");
     return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
@@ -52,6 +72,12 @@ rclcpp_action::CancelResponse CrawlerdumpSwing::handle_cancel(const std::shared_
 
 void CrawlerdumpSwing::handle_accepted(const std::shared_ptr<GoalHandle> goal_handle)
 {
+    current_goal_handle_ = goal_handle;
+    if (!communication_monitor_->is_connected()) {
+      RCLCPP_WARN(this->get_logger(), "Communication lost before execution started; aborting accepted goal");
+      if (goal_handle->is_active()) goal_handle->abort(std::make_shared<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle::Result>());
+      return;
+    }
     using namespace std::placeholders;
     std::thread{ std::bind(&CrawlerdumpSwing::execute, this, _1), goal_handle }.detach();
 }
@@ -59,8 +85,7 @@ void CrawlerdumpSwing::handle_accepted(const std::shared_ptr<GoalHandle> goal_ha
 void CrawlerdumpSwing::execute(const std::shared_ptr<GoalHandle> goal_handle)
 {
     RCLCPP_INFO(this->get_logger(), "tms_if_for_opera(tms_if_crawlerdump_swing_node) is executing...");
-    current_goal_handle_ = goal_handle;
-    auto result = std::make_shared<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle::Result>();
+auto result = std::make_shared<tms_msg_rp::action::TmsRpCrawlerDumpSwingAngle::Result>();
     auto handle_error = [&](const std::string& message) {
         if (goal_handle->is_active())
         {
@@ -92,6 +117,12 @@ void CrawlerdumpSwing::execute(const std::shared_ptr<GoalHandle> goal_handle)
 
 void CrawlerdumpSwing::goal_response_callback(const GoalHandleCrawlerdumpSwing::SharedPtr& goal_handle)
 {
+  if (goal_handle && !communication_monitor_->is_connected()) {
+    RCLCPP_WARN(this->get_logger(), "Communication lost before downstream goal acceptance; canceling downstream goal");
+    action_client_->async_cancel_goal(goal_handle);
+    return;
+  }
+
   if (!goal_handle)
   {
     RCLCPP_ERROR(this->get_logger(), "Goal was rejected by server");

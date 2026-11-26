@@ -309,3 +309,47 @@ ros2 launch tms_ts_launch tms_ts_construction.launch.py task_id:=<task_id>
 ※<task_id>は、zx200を使用するタスクのidを指定する。
     
 
+
+
+## Robot communication monitoring
+
+All Action Server nodes can optionally monitor one robot-state topic. Monitoring is disabled by default.
+The first message must be received before an incoming action goal is accepted. If the selected topic stops
+publishing for longer than `monitor_timeout`, new goals are rejected and active relay goals are canceled
+(best effort) and aborted. The MoveIt Action Server calls `MoveGroupInterface::stop()` and aborts its active goal.
+After the topic starts publishing again, new goals can be accepted automatically.
+
+Launch arguments (available in the package launch files):
+
+- `monitor_enabled`: `true` or `false` (default `false`)
+- `monitor_type`: `pose` or `joint_state`
+- `monitor_msg_type`: `geometry_msgs/msg/PoseStamped` or `nav_msgs/msg/Odometry` (used for `pose`)
+- `monitor_topic`: topic name; relative names are resolved in each node namespace
+- `monitor_timeout`: timeout in seconds (default `1.0`)
+- `monitor_check_period`: check period in seconds (default `0.1`)
+
+Examples:
+
+```bash
+# PoseStamped position/pose monitoring
+ros2 launch tms_if_for_opera tms_if_for_opera_excavator.launch.py \
+  monitor_enabled:=true monitor_type:=pose \
+  monitor_msg_type:=geometry_msgs/msg/PoseStamped \
+  monitor_topic:=global_pose monitor_timeout:=1.0
+
+# Odometry monitoring
+ros2 launch tms_if_for_opera tms_if_for_opera_excavator.launch.py \
+  monitor_enabled:=true monitor_type:=pose \
+  monitor_msg_type:=nav_msgs/msg/Odometry \
+  monitor_topic:=odom monitor_timeout:=1.0
+
+# JointState monitoring
+ros2 launch tms_if_for_opera tms_if_for_opera_crawlerdump.launch.py \
+  monitor_enabled:=true monitor_type:=joint_state \
+  monitor_topic:=joint_states monitor_timeout:=1.0
+```
+
+The monitor uses the local steady clock and message arrival time, not the message header timestamp. For relay
+Action Servers, downstream cancellation is best-effort: if the robot-side connection is already broken, the
+cancel request may not reach the robot. A robot-controller-side communication watchdog / safe-stop remains
+necessary for physical safety.
