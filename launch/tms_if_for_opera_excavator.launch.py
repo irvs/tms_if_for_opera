@@ -54,8 +54,8 @@ def generate_launch_description():
     # Load kinematics.yaml
     kinematics_yaml = load_yaml('zx200_moveit_config', 'config/kinematics.yaml')
 
-    # straight_navigation_bt = ( '/home/common/ros2-tms-for-construction_ws/src/opera/zx200/zx200_ros2/zx200_straight_navigation/linear_path_controller/straight_navigation.xml' )
-    straight_navigation_bt = ( '/home/zx200/ros2_ws/src/zx200_ros2/zx200_straight_navigation/linear_path_controller/straight_navigation.xml' )
+    straight_navigation_bt = ( '/home/common/ros2-tms-for-construction_ws/src/opera/zx200/zx200_ros2/zx200_straight_navigation/linear_path_controller/straight_navigation.xml' )
+    # straight_navigation_bt = ( '/home/zx200/ros2_ws/src/zx200_ros2/zx200_straight_navigation/linear_path_controller/straight_navigation.xml' )
 
     # Declare the launch arguments
     declare_use_sim_time_arg = DeclareLaunchArgument(
